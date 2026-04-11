@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+/* Surcharges FullCalendar */
+.fc .fc-button {
+  background-color: #4784EC !important;
+  border-color: #4784EC !important;
+  border-radius: 9999px !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  padding: 0.3rem 0.8rem !important;
+}
+.fc .fc-button:hover {
+  background-color: #3860b0 !important;
+}
+.fc .fc-button-active {
+  background-color: #32325D !important;
+  border-color: #32325D !important;
+}
+.fc .fc-col-header-cell {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #999;
+  text-transform: uppercase;
+}
+.fc .fc-daygrid-day-number {
+  font-size: 0.8rem;
+  color: #32325D;
+  font-weight: 500;
+}
+.fc .fc-day-today {
+  background-color: #EFF4FD !important;
+}
+.fc .fc-toolbar-title {
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+  color: #11253E !important;
+}
+
+@theme inline {
+  --color-fw-blue: #4784EC;
+  --color-fw-blue-dark: #3860b0;
+  --color-fw-navy: #11253E;
+  --color-fw-slate: #32325D;
+  --color-fw-teal: #6CC8C1;
+  --color-fw-yellow: #FFE100;
+  --color-fw-orange: #FFBB72;
+  --color-fw-gray: #F0F0F0;
+  --color-fw-text: #585858;
+  --color-fw-text-light: #999999;
+}
+
+body {
+  background: #ffffff;
+  color: #585858;
+  font-family: "Open Sans", "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+h1, h2, h3, h4 {
+  font-family: "Nunito", "Open Sans", Helvetica, Arial, sans-serif;
+  color: #11253E;
+}

@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+coverage/
+
+# Environment (ne jamais committer les secrets)
+.env
+.env.local
+.env*.local
+.env.development
+.env.production
+
+# Logs
+npm-debug.log*
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# TypeScript
+*.tsbuildinfo
+
+# Ancien dossier web avant migration monorepo (à supprimer)
+family-hub-web/
+
+# Claude Code local session data
+.claude/
+
+# NestJS
+apps/backend/uploads/
+apps/backend/dist/
+
+# Next.js
+apps/web/.next/
