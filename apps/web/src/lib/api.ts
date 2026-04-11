@@ -15,9 +15,9 @@ export interface ChatResponse {
   response: string;
   image?: string;
   pdfUrl?: string;
-  conversation_id?: number;
+  conversation_id?: string;
   agent?: {
-    id: number;
+    id: string;
     name: string;
     label: string;
     category: string;
@@ -26,7 +26,7 @@ export interface ChatResponse {
 }
 
 export interface Agent {
-  id: number;
+  id: string;
   name: string;
   description: string;
   category: string;
