@@ -4,6 +4,22 @@
  */
 import { createServer } from 'http'
 import { google } from 'googleapis'
+import { readFileSync } from 'fs'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
+
+// Charge le .env racine du monorepo
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const envPath = resolve(__dirname, '../../../.env')
+for (const line of readFileSync(envPath, 'utf-8').split('\n')) {
+  const t = line.trim()
+  if (!t || t.startsWith('#')) continue
+  const eq = t.indexOf('=')
+  if (eq === -1) continue
+  const k = t.slice(0, eq).trim()
+  const v = t.slice(eq + 1).trim()
+  if (!process.env[k]) process.env[k] = v
+}
 
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET

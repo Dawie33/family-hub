@@ -4,7 +4,6 @@ import { AgentsService } from '../agents/agents.service'
 import { AIService, ChatMessage, ModelProvider } from '../ai/ai.service'
 import { FunctionCall, OpenAIService } from '../ai/openai.service'
 import { EventsService } from '../events/events.service'
-import { GoogleCalendarService } from '../events/google-calendar.service'
 import { NotificationsService } from '../notifications/notifications.service'
 import { PdfService } from '../pdf/pdf.service'
 import { ShoppingItem } from '../pdf/dto/shopping-list.dto'
@@ -38,7 +37,6 @@ export class ChatService {
     private aiService: AIService,
     private openAIService: OpenAIService,
     private eventsService: EventsService,
-    private googleCalendarService: GoogleCalendarService,
     private agentRouterService: AgentRouterService,
     private notificationsService: NotificationsService,
     private pdfService: PdfService,
@@ -359,7 +357,7 @@ Règles:
         systemPrompt += '\n\n' + this.trainingCampClient.getProgramSummary(program)
       }
     } catch (error) {
-      this.logger.warn(`Failed to fetch Training Camp data: ${error.message}`)
+      this.logger.warn(`Failed to fetch Training Camp data: ${(error as Error).message}`)
       systemPrompt += '\n\n## Statut Training Camp\nLa connexion à Training Camp a échoué. Informe l\'utilisateur du problème et propose-lui de l\'aider sans les données Training Camp.'
     }
 
@@ -495,8 +493,8 @@ Règles:
 
         results.push({ function: call.name, success: true, result })
       } catch (error) {
-        this.logger.error(`Error executing ${call.name}: ${error.message}`)
-        results.push({ function: call.name, success: false, result: { error: error.message } })
+        this.logger.error(`Error executing ${call.name}: ${(error as Error).message}`)
+        results.push({ function: call.name, success: false, result: { error: (error as Error).message } })
       }
     }
 
@@ -777,90 +775,51 @@ Règles:
 
         switch (call.name) {
           case 'create_event':
-            if (this.googleCalendarService.isConfigured) {
-              result = await this.googleCalendarService.createEvent({
-                title: call.arguments.title as string,
-                start_date: call.arguments.start_date as string,
-                end_date: call.arguments.end_date as string | undefined,
-                description: call.arguments.description as string | undefined,
-                location: call.arguments.location as string | undefined,
-                all_day: call.arguments.all_day as boolean | undefined,
-                recurrence: call.arguments.recurrence as 'daily' | 'weekly' | 'monthly' | 'yearly' | undefined,
-              })
-            } else {
-              result = await this.eventsService.create({
-                title: call.arguments.title as string,
-                start_date: call.arguments.start_date as string,
-                end_date: call.arguments.end_date as string | undefined,
-                description: call.arguments.description as string | undefined,
-                location: call.arguments.location as string | undefined,
-                all_day: call.arguments.all_day as boolean | undefined,
-                category: call.arguments.category as 'rdv' | 'tache' | 'rappel' | 'anniversaire' | 'autre' | undefined,
-                recurrence: call.arguments.recurrence as 'daily' | 'weekly' | 'monthly' | 'yearly' | undefined,
-              })
-            }
+            result = await this.eventsService.create({
+              title: call.arguments.title as string,
+              start_date: call.arguments.start_date as string,
+              end_date: call.arguments.end_date as string | undefined,
+              description: call.arguments.description as string | undefined,
+              location: call.arguments.location as string | undefined,
+              all_day: call.arguments.all_day as boolean | undefined,
+              category: call.arguments.category as 'rdv' | 'tache' | 'rappel' | 'anniversaire' | 'autre' | undefined,
+              recurrence: call.arguments.recurrence as 'daily' | 'weekly' | 'monthly' | 'yearly' | undefined,
+            })
             break
 
           case 'get_events_today':
-            result = this.googleCalendarService.isConfigured
-              ? await this.googleCalendarService.getEventsToday()
-              : await this.eventsService.findToday()
+            result = await this.eventsService.findToday()
             break
 
           case 'get_events_week':
-            result = this.googleCalendarService.isConfigured
-              ? await this.googleCalendarService.getEventsThisWeek()
-              : await this.eventsService.findThisWeek()
+            result = await this.eventsService.findThisWeek()
             break
 
           case 'get_events_range':
-            result = this.googleCalendarService.isConfigured
-              ? await this.googleCalendarService.getEventsByRange(
-                  new Date(call.arguments.start_date as string),
-                  new Date(call.arguments.end_date as string)
-                )
-              : await this.eventsService.findByDateRange(
-                  new Date(call.arguments.start_date as string),
-                  new Date(call.arguments.end_date as string)
-                )
+            result = await this.eventsService.findByDateRange(
+              new Date(call.arguments.start_date as string),
+              new Date(call.arguments.end_date as string)
+            )
             break
 
-          case 'update_event':
-            if (this.googleCalendarService.isConfigured) {
-              result = await this.googleCalendarService.updateEvent(
-                call.arguments.event_id as string,
-                {
-                  title: call.arguments.title as string | undefined,
-                  start_date: call.arguments.start_date as string | undefined,
-                  end_date: call.arguments.end_date as string | undefined,
-                  description: call.arguments.description as string | undefined,
-                  location: call.arguments.location as string | undefined,
-                }
-              )
-            } else {
-              const updateData: any = {}
-              if (call.arguments.title) updateData.title = call.arguments.title
-              if (call.arguments.start_date) updateData.start_date = new Date(call.arguments.start_date as string)
-              if (call.arguments.end_date) updateData.end_date = new Date(call.arguments.end_date as string)
-              if (call.arguments.description) updateData.description = call.arguments.description
-              if (call.arguments.location) updateData.location = call.arguments.location
-              result = await this.eventsService.update(call.arguments.event_id as string, updateData)
-            }
+          case 'update_event': {
+            const updateData: any = {}
+            if (call.arguments.title) updateData.title = call.arguments.title
+            if (call.arguments.start_date) updateData.start_date = new Date(call.arguments.start_date as string)
+            if (call.arguments.end_date) updateData.end_date = new Date(call.arguments.end_date as string)
+            if (call.arguments.description) updateData.description = call.arguments.description
+            if (call.arguments.location) updateData.location = call.arguments.location
+            result = await this.eventsService.update(call.arguments.event_id as string, updateData)
             break
+          }
 
           case 'delete_event':
-            if (this.googleCalendarService.isConfigured) {
-              await this.googleCalendarService.deleteEvent(call.arguments.event_id as string)
-            } else {
-              await this.eventsService.remove(call.arguments.event_id as string)
-            }
+            await this.eventsService.remove(call.arguments.event_id as string)
             result = { deleted: true, id: call.arguments.event_id }
             break
 
           case 'search_events':
-            result = this.googleCalendarService.isConfigured
-              ? await this.googleCalendarService.searchEvents(call.arguments.query as string)
-              : await this.eventsService.search(call.arguments.query as string)
+            result = await this.eventsService.search(call.arguments.query as string)
             break
 
           default:
@@ -869,8 +828,8 @@ Règles:
 
         results.push({ function: call.name, success: true, result })
       } catch (error) {
-        this.logger.error(`Error executing ${call.name}: ${error.message}`)
-        results.push({ function: call.name, success: false, result: { error: error.message } })
+        this.logger.error(`Error executing ${call.name}: ${(error as Error).message}`)
+        results.push({ function: call.name, success: false, result: { error: (error as Error).message } })
       }
     }
 
@@ -892,8 +851,8 @@ Règles:
       this.logger.log(`Shopping list PDF generated: ${result.url}`)
       return { success: true, url: result.url }
     } catch (error) {
-      this.logger.error(`PDF generation error: ${error.message}`)
-      return { success: false, error: error.message }
+      this.logger.error(`PDF generation error: ${(error as Error).message}`)
+      return { success: false, error: (error as Error).message }
     }
   }
 
@@ -921,8 +880,8 @@ Règles:
       this.logger.log(`Recipe saved: ${recipe.title} (ID: ${recipe.id})`)
       return { success: true, recipe }
     } catch (error) {
-      this.logger.error(`Save recipe error: ${error.message}`)
-      return { success: false, error: error.message }
+      this.logger.error(`Save recipe error: ${(error as Error).message}`)
+      return { success: false, error: (error as Error).message }
     }
   }
 }
