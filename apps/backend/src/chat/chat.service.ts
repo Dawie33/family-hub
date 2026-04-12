@@ -286,8 +286,8 @@ Règles:
       { role: 'user', content: chatRequest.message },
     ]
 
-    // Appeler l'IA avec les outils d'agenda
-    const result = await this.openAIService.chatWithTools(messages, AGENDA_TOOLS, agent.model_name || 'gpt-4o-mini')
+    // Appeler l'IA avec les outils d'agenda — 'required' force l'appel d'un outil
+    const result = await this.openAIService.chatWithTools(messages, AGENDA_TOOLS, agent.model_name || 'gpt-4o-mini', 'required')
 
     // Si l'IA a demandé des appels de fonction d'agenda
     if (result.functionCalls.length > 0) {

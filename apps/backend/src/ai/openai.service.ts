@@ -38,7 +38,7 @@ export class OpenAIService {
 
       return response.choices[0]?.message?.content || '';
     } catch (error) {
-      this.logger.error(`OpenAI API error: ${error.message}`);
+      this.logger.error(`OpenAI API error: ${(error as Error).message}`);
       throw error;
     }
   }
@@ -68,7 +68,7 @@ export class OpenAIService {
 
       return fullResponse;
     } catch (error) {
-      this.logger.error(`OpenAI streaming error: ${error.message}`);
+      this.logger.error(`OpenAI streaming error: ${(error as Error).message}`);
       throw error;
     }
   }
@@ -80,6 +80,7 @@ export class OpenAIService {
     messages: ChatMessage[],
     tools: ChatCompletionTool[],
     modelName: string = 'gpt-4o-mini',
+    toolChoice: 'auto' | 'required' | 'none' = 'auto',
   ): Promise<ChatWithToolsResult> {
     try {
       const openaiMessages: ChatCompletionMessageParam[] = messages.map((m) => ({
@@ -91,7 +92,7 @@ export class OpenAIService {
         model: modelName,
         messages: openaiMessages,
         tools,
-        tool_choice: 'auto',
+        tool_choice: toolChoice,
         max_tokens: 1024,
       });
 
@@ -114,7 +115,7 @@ export class OpenAIService {
         functionCalls,
       };
     } catch (error) {
-      this.logger.error(`OpenAI API error with tools: ${error.message}`);
+      this.logger.error(`OpenAI API error with tools: ${(error as Error).message}`);
       throw error;
     }
   }
@@ -150,7 +151,7 @@ export class OpenAIService {
 
       return null;
     } catch (error) {
-      this.logger.error(`DALL-E API error: ${error.message}`);
+      this.logger.error(`DALL-E API error: ${(error as Error).message}`);
       return null;
     }
   }
