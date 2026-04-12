@@ -155,15 +155,22 @@ export class AgentRouterService implements OnModuleInit {
       ],
     },
     {
+      agentName: 'gestionnaire_agenda',
+      keywords: [
+        /\b(ajoute|ajouter|crée|créer|planifie|planifier|mets?|met)\b.{0,20}\b(rdv|rendez-vous|rappel|événement|évènement)\b/i,
+        /\b(rdv|rendez-vous)\b.{0,30}\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|aujourd'hui|matin|après-midi|soir|\d{1,2}h)\b/i,
+        /\b(supprime|supprimer|annule|annuler|efface)\b.{0,20}\b(rdv|rendez-vous|événement|rappel)\b/i,
+        /\bqu[' ]ai-?je\b.{0,20}\b(demain|aujourd'hui|ce soir|cette semaine|prévu)\b/i,
+        /\bmon (emploi du temps|planning|agenda)\b/i,
+      ],
+    },
+    {
       agentName: 'famille_organisateur',
       keywords: [
         /\b(famille|familial)\b/i,
-        /\b(calendrier|agenda|événement|évènement)\b/i,
         /\b(anniversaire|anniversaires)\b/i,
         /\b(weekend|week-end)\b/i,
         /\b(activité|activités) (famille|familial)\b/i,
-        /\b(rendez-vous|rdv)\b/i,
-        /\b(planifie|planifier|ajouter|créer) (un |une )\b/i,
       ],
     },
     {
