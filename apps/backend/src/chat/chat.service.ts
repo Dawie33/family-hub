@@ -291,7 +291,7 @@ Règles:
 
     // Si l'IA a demandé des appels de fonction d'agenda
     if (result.functionCalls.length > 0) {
-      const functionResults = await this.executeAgendaFunctions(result.functionCalls)
+      const functionResults = await this.executeAgendaFunctions(result.functionCalls, chatRequest.family_id)
 
       // Générer une réponse finale avec les résultats
       const resultMessages: ChatMessage[] = [
@@ -765,7 +765,8 @@ Règles:
    * Exécute les fonctions d'agenda demandées par l'IA
    */
   private async executeAgendaFunctions(
-    functionCalls: FunctionCall[]
+    functionCalls: FunctionCall[],
+    familyId?: string,
   ): Promise<{ function: string; success: boolean; result: any }[]> {
     const results: { function: string; success: boolean; result: any }[] = []
 
@@ -776,13 +777,14 @@ Règles:
         switch (call.name) {
           case 'create_event':
             result = await this.eventsService.create({
+              family_id: familyId,
               title: call.arguments.title as string,
               start_date: call.arguments.start_date as string,
               end_date: call.arguments.end_date as string | undefined,
               description: call.arguments.description as string | undefined,
               location: call.arguments.location as string | undefined,
               all_day: call.arguments.all_day as boolean | undefined,
-              category: call.arguments.category as 'rdv' | 'tache' | 'rappel' | 'anniversaire' | 'autre' | undefined,
+              category: call.arguments.category as 'appointment' | 'birthday' | 'sport' | 'meal' | 'school' | 'vacation' | 'family' | 'other' | undefined,
               recurrence: call.arguments.recurrence as 'daily' | 'weekly' | 'monthly' | 'yearly' | undefined,
             })
             break

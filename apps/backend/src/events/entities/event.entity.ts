@@ -1,18 +1,19 @@
-export type EventCategory = 'rdv' | 'tache' | 'rappel' | 'anniversaire' | 'autre';
+export type EventCategory = 'school' | 'vacation' | 'birthday' | 'appointment' | 'sport' | 'meal' | 'family' | 'other';
 export type Recurrence = 'daily' | 'weekly' | 'monthly' | 'yearly' | null;
 
 export class Event {
-  id: number;
-  user_id: number | null;
+  id: string;
+  family_id: string | null;
+  user_id: string | null;
   title: string;
   description: string | null;
-  start_date: Date;
-  end_date: Date | null;
+  start_date: string;
+  end_date: string | null;
   all_day: boolean;
   location: string | null;
   reminder_minutes: number | null;
   recurrence: Recurrence;
   category: EventCategory | null;
-  created_at: Date;
-  updated_at: Date;
+  created_at: string;
+  updated_at: string;
 }

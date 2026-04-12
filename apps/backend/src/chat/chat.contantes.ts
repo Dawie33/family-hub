@@ -180,8 +180,8 @@ export const AGENDA_TOOLS: ChatCompletionTool[] = [
           all_day: { type: 'boolean', description: 'Événement toute la journée (optionnel)' },
           category: {
             type: 'string',
-            enum: ['rdv', 'tache', 'rappel', 'anniversaire', 'autre'],
-            description: "Catégorie de l'événement",
+            enum: ['appointment', 'birthday', 'sport', 'meal', 'school', 'vacation', 'family', 'other'],
+            description: "Catégorie : appointment=rendez-vous, birthday=anniversaire, sport, meal=repas, school=école, vacation=vacances, family=famille, other=autre",
           },
           recurrence: {
             type: 'string',

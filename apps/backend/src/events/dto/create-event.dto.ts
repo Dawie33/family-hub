@@ -1,6 +1,10 @@
 import { IsString, IsOptional, IsBoolean, IsNumber, IsDateString, IsIn } from 'class-validator';
 
 export class CreateEventDto {
+  @IsOptional()
+  @IsString()
+  family_id?: string;
+
   @IsString()
   title: string;
 
@@ -32,6 +36,6 @@ export class CreateEventDto {
   recurrence?: 'daily' | 'weekly' | 'monthly' | 'yearly';
 
   @IsOptional()
-  @IsIn(['rdv', 'tache', 'rappel', 'anniversaire', 'autre'])
-  category?: 'rdv' | 'tache' | 'rappel' | 'anniversaire' | 'autre';
+  @IsIn(['school', 'vacation', 'birthday', 'appointment', 'sport', 'meal', 'family', 'other'])
+  category?: 'school' | 'vacation' | 'birthday' | 'appointment' | 'sport' | 'meal' | 'family' | 'other';
 }

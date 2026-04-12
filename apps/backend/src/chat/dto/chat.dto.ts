@@ -21,6 +21,10 @@ export class ChatRequestDto {
   @IsOptional()
   session_id?: string
 
+  @IsString()
+  @IsOptional()
+  family_id?: string
+
   @IsArray()
   @IsOptional()
   @ValidateNested({ each: true })

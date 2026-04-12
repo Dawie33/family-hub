@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { sendChatMessage, getAgents, Agent } from '@/lib/api';
+import { useFamilyStore } from '@/stores/familyStore';
 
 interface Message {
   id: string;
@@ -45,6 +46,8 @@ const EXAMPLE_COMMANDS: Record<string, string[]> = {
 };
 
 export default function AgentScreen() {
+  const family = useFamilyStore((s) => s.family);
+  const fetchFamily = useFamilyStore((s) => s.fetchFamily);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [showAgentPicker, setShowAgentPicker] = useState(false);
@@ -63,6 +66,7 @@ export default function AgentScreen() {
     getAgents()
       .then((data) => setAgents(data.filter((a) => a.is_active)))
       .catch(() => {});
+    if (!family) fetchFamily().catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -95,6 +99,7 @@ export default function AgentScreen() {
         message: userMessage.content,
         agent_id: selectedAgent?.id,
         session_id: 'family-hub-web-session',
+        family_id: family?.id,
         conversation_history: messages.slice(-10).map((m) => ({ role: m.role, content: m.content })),
       });
 

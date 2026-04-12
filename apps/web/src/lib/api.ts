@@ -9,6 +9,7 @@ export interface ChatRequest {
   message: string;
   agent_id?: string;
   session_id?: string;
+  family_id?: string;
   conversation_history?: ChatMessage[];
 }
 
