@@ -3,11 +3,12 @@ import { createSupabaseServerClient } from '@/lib/supabase-server';
 
 const TRAINING_CAMP_API = process.env.TRAINING_CAMP_API || 'https://training-camp-backend.onrender.com/api';
 
-async function refreshToken(memberId: string, providerEmail: string, supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>): Promise<string | null> {
-  // Impossible de rafraîchir sans le password — on retourne null pour forcer la re-liaison
-  console.warn(`[training/sessions] Token expiré pour le membre ${memberId} (${providerEmail}), re-liaison requise`);
-  await supabase.from('member_integrations').update({ status: 'expired' }).eq('member_id', memberId).eq('provider', 'training-camp');
-  return null;
+async function markTokenExpired(memberId: string, supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>): Promise<void> {
+  await supabase
+    .from('member_integrations')
+    .update({ status: 'expired' })
+    .eq('member_id', memberId)
+    .eq('provider', 'training-camp');
 }
 
 export async function GET(request: Request) {
@@ -42,15 +43,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Compte Training-Camp non lié', code: 'NOT_LINKED' }, { status: 403 });
     }
 
-    let token = integration.access_token;
-
-    // Token expiré : tentative de refresh
-    if (new Date(integration.token_expires_at) <= new Date()) {
-      token = await refreshToken(member.id, integration.provider_email, supabase);
-      if (!token) {
-        return NextResponse.json({ error: 'Session Training-Camp expirée, veuillez re-lier votre compte', code: 'TOKEN_EXPIRED' }, { status: 403 });
-      }
-    }
+    const token = integration.access_token;
 
     const { searchParams } = new URL(request.url);
     const limit = searchParams.get('limit') || '20';
@@ -66,9 +59,22 @@ export async function GET(request: Request) {
     const rawText = await res.text();
     console.log(`[training/sessions] status=${res.status} body=${rawText.slice(0, 500)}`);
 
+    // Si Training Camp dit que le token est invalide → forcer le re-lien
+    if (res.status === 401) {
+      await markTokenExpired(member.id, supabase);
+      return NextResponse.json({ error: 'Session Training-Camp expirée, veuillez re-lier votre compte', code: 'TOKEN_EXPIRED' }, { status: 403 });
+    }
+
     if (!res.ok) {
       return NextResponse.json({ error: `Erreur Training-Camp (${res.status})`, detail: rawText.slice(0, 200) }, { status: res.status });
     }
+
+    // Token encore valide : prolonger la date d'expiration locale (30 jours glissants)
+    await supabase
+      .from('member_integrations')
+      .update({ token_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() })
+      .eq('member_id', member.id)
+      .eq('provider', 'training-camp');
 
     let parsed: unknown;
     try {

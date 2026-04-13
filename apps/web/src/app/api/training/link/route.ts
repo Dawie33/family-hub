@@ -71,7 +71,7 @@ export async function POST(request: Request) {
     }
 
     // Upsert dans member_integrations
-    const expiresAt = new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 jours (la vraie expiration est gérée par le 401 de l'API)
     const { error } = await supabase
       .from('member_integrations')
       .upsert({
