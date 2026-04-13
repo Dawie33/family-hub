@@ -11,6 +11,7 @@ import { PdfModule } from './pdf/pdf.module'
 import { WeatherModule } from './weather/weather.module'
 import { RecipesModule } from './recipes/recipes.module'
 import { TrainingCampModule } from './training-camp/training-camp.module'
+import { RecipeAiModule } from './recipe-ai/recipe-ai.module'
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { TrainingCampModule } from './training-camp/training-camp.module'
     WeatherModule,
     RecipesModule,
     TrainingCampModule,
+    RecipeAiModule,
   ],
 })
 export class AppModule {}

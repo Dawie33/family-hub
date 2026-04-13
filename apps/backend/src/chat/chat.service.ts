@@ -22,11 +22,13 @@ import {
   DELEGATION_TOOL,
   IMAGE_GENERATION_AGENTS,
   PDF_SHOPPING_LIST_TOOL,
+  RECIPE_AI_TOOLS,
   SAVE_RECIPE_TOOL,
   TRAINING_CAMP_TOOLS,
 } from './chat.contantes'
 import { SearchService } from './services/search.service'
 import { TrainingCampClient } from '../training-camp/training-camp.service'
+import { RecipeAiClient } from '../recipe-ai/recipe-ai.service'
 
 @Injectable()
 export class ChatService {
@@ -43,7 +45,8 @@ export class ChatService {
     private searchService: SearchService,
     private memoryService: MemoryService,
     private recipesService: RecipesService,
-    private trainingCampClient: TrainingCampClient
+    private trainingCampClient: TrainingCampClient,
+    private recipeAiClient: RecipeAiClient,
   ) {}
 
   async chat(chatRequest: ChatRequestDto): Promise<ChatResponseDto> {
@@ -75,6 +78,11 @@ export class ChatService {
     // Cas spécial: Gestionnaire Agenda avec function calling
     if (agent.name === 'gestionnaire_agenda') {
       return this.handleAgendaChat(chatRequest, agent, sessionId)
+    }
+
+    // Cas spécial: Coach Nutrition avec Recipe AI
+    if (agent.name === 'coach_nutrition') {
+      return this.handleNutritionChat(chatRequest, agent, sessionId)
     }
 
     // Cas spécial: Coach Sport avec function calling pour Training Camp
@@ -320,6 +328,137 @@ Règles:
       { response: result.content || "Je n'ai pas compris ta demande concernant l'agenda.", image: undefined },
       agent
     )
+  }
+
+  /**
+   * Gère les requêtes pour Coach Nutrition avec Recipe AI
+   */
+  private async handleNutritionChat(
+    chatRequest: ChatRequestDto,
+    agent: any,
+    sessionId?: string,
+  ): Promise<ChatResponseDto> {
+    const conversationHistory: ChatMessage[] = (chatRequest.conversation_history || []).map(msg => ({
+      role: msg.role as 'user' | 'assistant',
+      content: msg.content,
+    }))
+
+    const memoryBlock = await this.memoryService.getMemoriesForPrompt(sessionId, 'nutrition')
+
+    let systemPrompt = agent.system_prompt
+    if (!this.recipeAiClient.isConfigured) {
+      systemPrompt += "\n\n## Statut Recipe AI\nRecipe AI n'est pas configuré. Génère les recettes par toi-même sans appeler les outils Recipe AI."
+    }
+    systemPrompt += '\n\nDate et heure actuelles: ' + new Date().toISOString()
+    if (memoryBlock) systemPrompt += memoryBlock
+
+    const messages: ChatMessage[] = [
+      { role: 'system', content: systemPrompt },
+      ...conversationHistory,
+      { role: 'user', content: chatRequest.message },
+    ]
+
+    const tools = this.recipeAiClient.isConfigured ? RECIPE_AI_TOOLS : []
+
+    const result = await this.openAIService.chatWithTools(messages, tools, agent.model_name || 'gpt-4o-mini')
+
+    if (result.functionCalls.length > 0) {
+      const functionResults = await this.executeNutritionFunctions(result.functionCalls)
+
+      const resultMessages: ChatMessage[] = [
+        ...messages,
+        {
+          role: 'assistant',
+          content: `J'ai exécuté les actions suivantes:\n${functionResults.map(r => `- ${r.function}: ${r.success ? 'Succès' : 'Erreur: ' + r.error}`).join('\n')}\n\nRésultats:\n${JSON.stringify(
+            functionResults.map(r => r.result),
+            null,
+            2,
+          )}`,
+        },
+        {
+          role: 'user',
+          content: "Présente les résultats de manière naturelle, conviviale et bien structurée pour l'utilisateur. Si c'est une recette, présente-la clairement avec les ingrédients et les étapes. Si c'est une liste de courses, organise-la par catégorie.",
+        },
+      ]
+
+      const finalResponse = await this.openAIService.chat(resultMessages, agent.model_name || 'gpt-4o-mini')
+
+      this.memoryService
+        .extractAndStoreMemories(sessionId, chatRequest.message, finalResponse, 'nutrition')
+        .catch(err => this.logger.error(`Memory extraction error: ${(err as Error).message}`))
+
+      return this.addAgentInfo({ response: finalResponse, image: undefined }, agent)
+    }
+
+    // Pas d'appel de fonction — réponse textuelle directe
+    const finalResponse = result.content || "Je n'ai pas compris ta demande. Tu peux me demander une recette, un menu de la semaine ou ta liste de courses !"
+
+    this.memoryService
+      .extractAndStoreMemories(sessionId, chatRequest.message, finalResponse, 'nutrition')
+      .catch(err => this.logger.error(`Memory extraction error: ${(err as Error).message}`))
+
+    return this.addAgentInfo({ response: finalResponse, image: undefined }, agent)
+  }
+
+  /**
+   * Exécute les fonctions Recipe AI demandées par le LLM
+   */
+  private async executeNutritionFunctions(
+    functionCalls: FunctionCall[],
+  ): Promise<{ function: string; success: boolean; result: any; error?: string }[]> {
+    const results: { function: string; success: boolean; result: any; error?: string }[] = []
+
+    for (const call of functionCalls) {
+      try {
+        let result: any
+
+        switch (call.name) {
+          case 'generate_recipe':
+            result = await this.recipeAiClient.generateRecipe({
+              ingredients: call.arguments.ingredients as string[],
+              filters: call.arguments.filters as string[] | undefined,
+              platTypes: call.arguments.platTypes as string[] | undefined,
+              difficulty: call.arguments.difficulty as string | undefined,
+              maxDuration: call.arguments.maxDuration as string | undefined,
+            })
+            break
+
+          case 'generate_meal_plan':
+            result = await this.recipeAiClient.generateMealPlan({
+              numberOfMeals: call.arguments.numberOfMeals as number,
+              numberOfPeople: (call.arguments.numberOfPeople as number) || 4,
+              filters: call.arguments.filters as string[] | undefined,
+              difficulty: call.arguments.difficulty as string | undefined,
+              maxDuration: call.arguments.maxDuration as string | undefined,
+            })
+            break
+
+          case 'get_saved_recipes':
+            result = await this.recipeAiClient.getSavedRecipes()
+            break
+
+          case 'save_recipe_to_recipeai':
+            result = await this.recipeAiClient.saveRecipe({
+              title: call.arguments.title as string,
+              ingredients: call.arguments.ingredients as string[],
+              steps: call.arguments.steps as string[],
+              duration: call.arguments.duration as string,
+              difficulty: call.arguments.difficulty as 'débutant' | 'intermédiaire' | 'chef',
+            })
+            break
+
+          default:
+            result = { error: `Fonction inconnue: ${call.name}` }
+        }
+
+        results.push({ function: call.name, success: true, result })
+      } catch (error) {
+        this.logger.error(`Recipe AI function error ${call.name}: ${(error as Error).message}`)
+        results.push({ function: call.name, success: false, result: null, error: (error as Error).message })
+      }
+    }
+
+    return results
   }
 
   /**

@@ -409,6 +409,122 @@ export const SAVE_RECIPE_TOOL: ChatCompletionTool = {
 // Agents qui peuvent sauvegarder des recettes (noms techniques)
 export const AGENTS_WITH_RECIPES = ['coach_nutrition']
 
+// Outils Recipe AI pour coach_nutrition
+export const RECIPE_AI_TOOLS: ChatCompletionTool[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'generate_recipe',
+      description: "Génère une recette personnalisée via Recipe AI à partir d'ingrédients ou d'une demande. Utilise cet outil quand l'utilisateur demande une recette, une idée de plat, ou comment cuisiner quelque chose.",
+      parameters: {
+        type: 'object',
+        properties: {
+          ingredients: {
+            type: 'array',
+            items: { type: 'string' },
+            description: "Liste des ingrédients disponibles (ex: ['poulet', 'tomates', 'riz']). Si l'utilisateur ne précise pas, déduis des ingrédients courants selon sa demande.",
+          },
+          filters: {
+            type: 'array',
+            items: { type: 'string' },
+            description: "Contraintes alimentaires (ex: ['végétarien', 'sans gluten', 'sans lactose'])",
+          },
+          platTypes: {
+            type: 'array',
+            items: { type: 'string' },
+            description: "Types de plat souhaités (ex: ['entrée', 'plat principal', 'dessert', 'soupe'])",
+          },
+          difficulty: {
+            type: 'string',
+            enum: ['débutant', 'intermédiaire', 'chef'],
+            description: 'Niveau de difficulté souhaité',
+          },
+          maxDuration: {
+            type: 'string',
+            description: "Temps de préparation maximum (ex: '30 minutes', '1 heure')",
+          },
+        },
+        required: ['ingredients'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'generate_meal_plan',
+      description: "Génère un planning repas pour la semaine + liste de courses consolidée via Recipe AI. Utilise cet outil quand l'utilisateur demande un menu de la semaine, un planning repas, ou une liste de courses.",
+      parameters: {
+        type: 'object',
+        properties: {
+          numberOfMeals: {
+            type: 'number',
+            description: "Nombre de repas à planifier (ex: 7 pour une semaine de dîners, 14 pour déjeuners + dîners)",
+          },
+          numberOfPeople: {
+            type: 'number',
+            description: 'Nombre de personnes (défaut: 4)',
+          },
+          filters: {
+            type: 'array',
+            items: { type: 'string' },
+            description: "Contraintes alimentaires de la famille",
+          },
+          difficulty: {
+            type: 'string',
+            enum: ['débutant', 'intermédiaire', 'chef'],
+            description: 'Niveau de difficulté souhaité',
+          },
+          maxDuration: {
+            type: 'string',
+            description: "Temps de préparation maximum par repas",
+          },
+        },
+        required: ['numberOfMeals', 'numberOfPeople'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_saved_recipes',
+      description: "Récupère les recettes sauvegardées dans Recipe AI. Utilise cet outil quand l'utilisateur demande ses recettes favorites, l'historique de recettes, ou cherche une recette déjà faite.",
+      parameters: {
+        type: 'object',
+        properties: {},
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'save_recipe_to_recipeai',
+      description: "Sauvegarde une recette dans Recipe AI. Utilise cet outil après avoir généré une recette et que l'utilisateur dit qu'il l'aime ou veut la garder.",
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Titre de la recette' },
+          ingredients: {
+            type: 'array',
+            items: { type: 'string' },
+            description: "Ingrédients avec quantités",
+          },
+          steps: {
+            type: 'array',
+            items: { type: 'string' },
+            description: "Étapes de préparation",
+          },
+          duration: { type: 'string', description: "Durée totale (ex: '45 minutes')" },
+          difficulty: {
+            type: 'string',
+            enum: ['débutant', 'intermédiaire', 'chef'],
+          },
+        },
+        required: ['title', 'ingredients', 'steps', 'duration', 'difficulty'],
+      },
+    },
+  },
+]
+
 // Outils pour Training Camp (coach_sport)
 export const TRAINING_CAMP_TOOLS: ChatCompletionTool[] = [
   {
