@@ -413,15 +413,24 @@ Règles:
         let result: any
 
         switch (call.name) {
-          case 'generate_recipe':
+          case 'generate_recipe': {
+            // Normalise : si le LLM passe un string ou un tableau vide, on le gère
+            let ingredients = call.arguments.ingredients as string[] | string | undefined
+            if (typeof ingredients === 'string') {
+              ingredients = ingredients.split(',').map((s: string) => s.trim()).filter(Boolean)
+            }
+            if (!ingredients || (ingredients as string[]).length === 0) {
+              ingredients = ['poulet', 'légumes de saison']
+            }
             result = await this.recipeAiClient.generateRecipe({
-              ingredients: call.arguments.ingredients as string[],
+              ingredients: ingredients as string[],
               filters: call.arguments.filters as string[] | undefined,
               platTypes: call.arguments.platTypes as string[] | undefined,
               difficulty: call.arguments.difficulty as string | undefined,
               maxDuration: call.arguments.maxDuration as string | undefined,
             })
             break
+          }
 
           case 'generate_meal_plan':
             result = await this.recipeAiClient.generateMealPlan({

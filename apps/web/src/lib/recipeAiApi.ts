@@ -1,5 +1,28 @@
-const RECIPE_AI_API = process.env.NEXT_PUBLIC_RECIPE_AI_API || 'https://recipe-ai.example.com/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
 
+export interface RecipeNutrition {
+  calories: number;
+  proteins: number;
+  carbs: number;
+  fat: number;
+}
+
+export interface Recipe {
+  id?: string;
+  title: string;
+  ingredients: string[];
+  steps: string[];
+  duration: string;
+  difficulty: 'débutant' | 'intermédiaire' | 'chef';
+  nutrition?: RecipeNutrition;
+  filters?: string[];
+  cuisine_type?: string;
+  rating?: number;
+  comment?: string;
+  created_at?: string;
+}
+
+// Ancien type conservé pour compatibilité
 export interface Meal {
   id: string;
   name: string;
@@ -10,54 +33,12 @@ export interface Meal {
   image?: string;
 }
 
-export async function getWeeklyMeals(): Promise<Meal[]> {
+export async function getSavedRecipes(): Promise<Recipe[]> {
   try {
-    const response = await fetch(`${RECIPE_AI_API}/meals/weekly`, {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-    
-    if (!response.ok) {
-      return getMockMeals();
-    }
-    
+    const response = await fetch(`${API_BASE_URL}/recipe-ai/recipes`);
+    if (!response.ok) return [];
     return response.json();
   } catch {
-    return getMockMeals();
+    return [];
   }
-}
-
-function getMockMeals(): Meal[] {
-  const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
-  const meals: Meal[] = [];
-  
-  days.forEach((day, dayIndex) => {
-    meals.push({
-      id: `${dayIndex}-breakfast`,
-      name: 'Petit-déjeuner',
-      day,
-      type: 'breakfast',
-      calories: 350,
-      prepTime: 10,
-    });
-    meals.push({
-      id: `${dayIndex}-lunch`,
-      name: 'Déjeuner',
-      day,
-      type: 'lunch',
-      calories: 600,
-      prepTime: 20,
-    });
-    meals.push({
-      id: `${dayIndex}-dinner`,
-      name: 'Dîner',
-      day,
-      type: 'dinner',
-      calories: 550,
-      prepTime: 30,
-    });
-  });
-  
-  return meals;
 }

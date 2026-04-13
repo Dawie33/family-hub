@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useFamilyStore } from '@/stores/familyStore';
 import { getTrainingSessions, TrainingSession } from '@/lib/trainingCampApi';
-import { getWeeklyMeals, Meal } from '@/lib/recipeAiApi';
+import { getSavedRecipes, Recipe } from '@/lib/recipeAiApi';
 
 const MODULE_CARDS = [
   {
@@ -44,7 +44,7 @@ const MODULE_CARDS = [
 export default function HomeScreen() {
   const family = useFamilyStore((s) => s.family);
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
-  const [meals, setMeals] = useState<Meal[]>([]);
+  const [meals, setMeals] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -52,7 +52,7 @@ export default function HomeScreen() {
       try {
         const [sessionsData, mealsData] = await Promise.all([
           getTrainingSessions(),
-          getWeeklyMeals(),
+          getSavedRecipes(),
         ]);
         setSessions(sessionsData.slice(0, 3));
         setMeals(mealsData.slice(0, 3));
@@ -224,21 +224,21 @@ export default function HomeScreen() {
             </div>
           ) : meals.length === 0 ? (
             <p className="text-sm text-center py-4" style={{ color: '#999' }}>
-              Aucun repas planifié
+              Aucune recette sauvegardée
             </p>
           ) : (
             <div className="space-y-2">
-              {meals.map((meal) => (
+              {meals.map((recipe, i) => (
                 <div
-                  key={meal.id}
+                  key={recipe.id ?? i}
                   className="flex justify-between items-center px-3 py-2.5 rounded-xl"
                   style={{ backgroundColor: '#F7F8FA' }}
                 >
-                  <span className="text-sm font-medium capitalize" style={{ color: '#32325D' }}>
-                    {meal.day}
+                  <span className="text-sm font-medium" style={{ color: '#32325D' }}>
+                    {recipe.title}
                   </span>
                   <span className="text-xs font-medium" style={{ color: '#999' }}>
-                    {meal.calories} kcal
+                    {recipe.duration}
                   </span>
                 </div>
               ))}

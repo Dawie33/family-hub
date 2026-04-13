@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common'
+import { randomUUID } from 'crypto'
 import { ConfigService } from '@nestjs/config'
 import axios, { AxiosInstance } from 'axios'
 import {
@@ -81,7 +82,10 @@ export class RecipeAiClient implements OnModuleInit {
    * Sauvegarde une recette dans Recipe AI
    */
   async saveRecipe(recipe: Omit<Recipe, 'id' | 'created_at'>): Promise<{ success: boolean }> {
-    const { data } = await this.client.post<{ success: boolean }>('/api/recipes', recipe)
+    const { data } = await this.client.post<{ success: boolean }>('/api/recipes', {
+      ...recipe,
+      id: randomUUID(),
+    })
     return data
   }
 
