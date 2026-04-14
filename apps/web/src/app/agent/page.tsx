@@ -9,6 +9,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   agent?: { name: string; label: string; icon?: string };
+  pdfUrl?: string;
 }
 
 const AGENT_ICONS: Record<string, string> = {
@@ -110,6 +111,7 @@ export default function AgentScreen() {
           role: 'assistant',
           content: response.response || "Désolé, je n'ai pas pu traiter votre demande.",
           agent: response.agent,
+          pdfUrl: response.pdfUrl,
         },
       ]);
     } catch {
@@ -241,6 +243,17 @@ export default function AgentScreen() {
                 </p>
               )}
               <p className="whitespace-pre-wrap">{message.content}</p>
+              {message.pdfUrl && (
+                <a
+                  href={message.pdfUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold w-fit transition-opacity hover:opacity-80"
+                  style={{ backgroundColor: '#FFBB72', color: '#fff' }}
+                >
+                  <span>📄</span> Télécharger la liste de courses (PDF)
+                </a>
+              )}
             </div>
           </div>
         ))}

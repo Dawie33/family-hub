@@ -17,7 +17,7 @@ export class PdfService {
       fs.mkdirSync(this.outputDir, { recursive: true });
     }
     // URL de base pour les PDF (backend URL)
-    this.baseUrl = process.env.API_BASE_URL || 'http://localhost:3001';
+    this.baseUrl = process.env.API_BASE_URL || 'http://localhost:3000';
   }
 
   /**

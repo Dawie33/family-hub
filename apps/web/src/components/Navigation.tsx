@@ -8,8 +8,8 @@ const NAV_ITEMS = [
   { href: '/',          label: 'Tableau de bord', mobileLabel: 'Accueil',   icon: '🏠' },
   { href: '/calendar',  label: 'Agenda',          mobileLabel: 'Agenda',    icon: '📅' },
   { href: '/agent',     label: 'Assistant IA',    mobileLabel: 'Assistant', icon: '💬' },
-  { href: '/training',  label: 'Sport',           mobileLabel: 'Sport',     icon: '💪' },
   { href: '/recipes',   label: 'Repas',           mobileLabel: 'Repas',     icon: '🍽️' },
+  { href: '/lists',     label: 'Listes',          mobileLabel: 'Listes',    icon: '🗂️' },
   { href: '/settings',  label: 'Paramètres',      mobileLabel: 'Réglages',  icon: '⚙️' },
 ];
 

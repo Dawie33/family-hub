@@ -29,6 +29,7 @@ import {
 import { SearchService } from './services/search.service'
 import { TrainingCampClient } from '../training-camp/training-camp.service'
 import { RecipeAiClient } from '../recipe-ai/recipe-ai.service'
+import { SupabaseService } from '../database/supabase.service'
 
 @Injectable()
 export class ChatService {
@@ -47,6 +48,7 @@ export class ChatService {
     private recipesService: RecipesService,
     private trainingCampClient: TrainingCampClient,
     private recipeAiClient: RecipeAiClient,
+    private supabase: SupabaseService,
   ) {}
 
   async chat(chatRequest: ChatRequestDto): Promise<ChatResponseDto> {
@@ -387,7 +389,64 @@ Règles:
         .extractAndStoreMemories(sessionId, chatRequest.message, finalResponse, 'nutrition')
         .catch(err => this.logger.error(`Memory extraction error: ${(err as Error).message}`))
 
-      return this.addAgentInfo({ response: finalResponse, image: undefined }, agent)
+      // Génère automatiquement un PDF si generate_meal_plan a retourné une liste de courses
+      const mealPlanResult = functionResults.find(r => r.function === 'generate_meal_plan' && r.success)
+      let pdfUrl: string | undefined
+
+      if (mealPlanResult?.result?.shoppingList?.length > 0) {
+        const recipes: any[] = mealPlanResult.result.recipes ?? []
+
+        // Sauvegarde automatique des recettes — le PDF n'est généré que si tout est sauvegardé
+        const saveResults = await Promise.allSettled(
+          recipes.map((recipe: any) =>
+            this.recipeAiClient.saveRecipe({
+              title: recipe.title,
+              ingredients: recipe.ingredients,
+              steps: recipe.steps,
+              duration: recipe.duration,
+              difficulty: recipe.difficulty,
+              nutrition: recipe.nutrition,
+              filters: recipe.filters,
+              cuisine_type: recipe.cuisine_type,
+            }),
+          ),
+        )
+
+        const failures = saveResults.filter(r => r.status === 'rejected')
+        if (failures.length > 0) {
+          failures.forEach((r, i) =>
+            this.logger.error(`Save recipe failed (recette ${i + 1}): ${(r as PromiseRejectedResult).reason?.message}`),
+          )
+          this.logger.warn(`${failures.length} recette(s) non sauvegardée(s) — PDF annulé`)
+        } else {
+          this.logger.log(`${recipes.length} recette(s) sauvegardée(s) dans Recipe AI`)
+
+          // Génération du PDF liste de courses uniquement si toutes les recettes sont sauvegardées
+          try {
+            const flatItems: ShoppingItem[] = mealPlanResult.result.shoppingList.flatMap(
+              (cat: { category: string; items: string[] }) =>
+                cat.items.map((item: string) => ({ item, category: cat.category })),
+            )
+            const titles = recipes
+              .map((r: { title: string }, i: number) => `Repas ${i + 1}: ${r.title}`)
+              .join(', ')
+            const pdf = await this.pdfService.generateShoppingListPdf(flatItems, titles)
+            pdfUrl = pdf.url
+
+            // Sauvegarde de la liste dans Supabase
+            await this.saveShoppingList({
+              familyId: chatRequest.family_id,
+              shoppingList: mealPlanResult.result.shoppingList,
+              mealSummary: titles,
+              pdfUrl: pdf.url,
+            })
+          } catch (err) {
+            this.logger.error(`PDF/shopping list save error: ${(err as Error).message}`)
+          }
+        }
+      }
+
+      return this.addAgentInfo({ response: finalResponse, image: undefined, pdfUrl }, agent)
     }
 
     // Pas d'appel de fonction — réponse textuelle directe
@@ -403,6 +462,46 @@ Règles:
   /**
    * Exécute les fonctions Recipe AI demandées par le LLM
    */
+  private async saveShoppingList(params: {
+    familyId?: string
+    shoppingList: { category: string; items: string[] }[]
+    mealSummary: string
+    pdfUrl: string
+  }): Promise<void> {
+    const listName = `Liste de courses — ${new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}`
+
+    // Crée la liste
+    const { data: list, error: listError } = await this.supabase.db
+      .from('shopping_lists')
+      .insert({ family_id: params.familyId ?? null, name: listName, color: '#4784EC', is_shared: true })
+      .select('id')
+      .single()
+
+    if (listError || !list) {
+      this.logger.error(`shopping_lists insert error: ${listError?.message}`)
+      return
+    }
+
+    // Insère les items
+    const itemRows = params.shoppingList.flatMap(cat =>
+      cat.items.map(item => ({
+        list_id: list.id,
+        name: item,
+        quantity: null as string | null,
+        unit: cat.category,
+        checked: false,
+      })),
+    )
+
+    const { error: itemsError } = await this.supabase.db.from('shopping_items').insert(itemRows)
+    if (itemsError) {
+      this.logger.error(`shopping_items insert error: ${itemsError.message}`)
+      return
+    }
+
+    this.logger.log(`Liste de courses sauvegardée (${itemRows.length} articles) — id: ${list.id}`)
+  }
+
   private async executeNutritionFunctions(
     functionCalls: FunctionCall[],
   ): Promise<{ function: string; success: boolean; result: any; error?: string }[]> {

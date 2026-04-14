@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common'
+import { Controller, Delete, Get, Param } from '@nestjs/common'
 import { RecipeAiClient } from './recipe-ai.service'
 import { Recipe } from './recipe-ai.types'
 
@@ -9,5 +9,10 @@ export class RecipeAiController {
   @Get('recipes')
   async getSavedRecipes(): Promise<Recipe[]> {
     return this.recipeAiClient.getSavedRecipes()
+  }
+
+  @Delete('recipes/:id')
+  async deleteRecipe(@Param('id') id: string): Promise<{ success: boolean }> {
+    return this.recipeAiClient.deleteRecipe(id)
   }
 }

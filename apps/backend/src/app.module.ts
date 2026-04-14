@@ -12,6 +12,7 @@ import { WeatherModule } from './weather/weather.module'
 import { RecipesModule } from './recipes/recipes.module'
 import { TrainingCampModule } from './training-camp/training-camp.module'
 import { RecipeAiModule } from './recipe-ai/recipe-ai.module'
+import { ShoppingModule } from './shopping/shopping.module'
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { RecipeAiModule } from './recipe-ai/recipe-ai.module'
     RecipesModule,
     TrainingCampModule,
     RecipeAiModule,
+    ShoppingModule,
   ],
 })
 export class AppModule {}
