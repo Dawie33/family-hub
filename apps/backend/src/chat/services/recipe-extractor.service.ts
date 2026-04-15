@@ -102,10 +102,10 @@ Règles :
     const parsed = this.parseJsonResponse(response)
 
     return {
-      title: parsed.title ?? 'Recette extraite',
-      ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : [],
-      steps: Array.isArray(parsed.steps) ? parsed.steps : [],
-      duration: parsed.duration ?? '30 minutes',
+      title: typeof parsed.title === 'string' ? parsed.title : 'Recette extraite',
+      ingredients: Array.isArray(parsed.ingredients) ? (parsed.ingredients as string[]) : [],
+      steps: Array.isArray(parsed.steps) ? (parsed.steps as string[]) : [],
+      duration: typeof parsed.duration === 'string' ? parsed.duration : '30 minutes',
       difficulty: this.normalizeDifficulty(parsed.difficulty),
       servings: typeof parsed.servings === 'number' ? parsed.servings : undefined,
       sourceUrl,

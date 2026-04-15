@@ -70,8 +70,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Membre familial introuvable' }, { status: 404 });
     }
 
-    // Upsert dans member_integrations
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 jours (la vraie expiration est gérée par le 401 de l'API)
+    // Upsert dans member_integrations (avec le mot de passe pour le re-login automatique)
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     const { error } = await supabase
       .from('member_integrations')
       .upsert({
@@ -80,6 +80,7 @@ export async function POST(request: Request) {
         access_token,
         token_expires_at: expiresAt,
         provider_email: email,
+        provider_password: password,
         status: 'active',
       }, { onConflict: 'member_id,provider' });
 
