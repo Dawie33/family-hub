@@ -14,6 +14,7 @@ export class Event {
   reminder_minutes: number | null;
   recurrence: Recurrence;
   category: EventCategory | null;
+  google_event_id: string | null;
   created_at: string;
   updated_at: string;
 }

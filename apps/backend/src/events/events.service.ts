@@ -1,15 +1,21 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { Injectable, Logger, NotFoundException } from '@nestjs/common'
 import { SupabaseService } from '../database/supabase.service'
 import { assertNoError } from '../database/supabase.helpers'
 import { CreateEventDto } from './dto/create-event.dto'
 import { UpdateEventDto } from './dto/update-event.dto'
 import { Event } from './entities/event.entity'
+import { GoogleCalendarService } from './google-calendar.service'
 
 const TABLE = 'family_events'
 
 @Injectable()
 export class EventsService {
-  constructor(private readonly supabase: SupabaseService) {}
+  private readonly logger = new Logger(EventsService.name)
+
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly googleCalendar: GoogleCalendarService,
+  ) {}
 
   private async getDefaultFamilyId(): Promise<string | null> {
     const { data } = await this.supabase.db
@@ -32,7 +38,28 @@ export class EventsService {
       })
       .select()
       .single()
-    return assertNoError(data, error, 'EventsService.create') as Event
+    const event = assertNoError(data, error, 'EventsService.create') as Event
+
+    // Sync Google Calendar (best-effort, ne bloque pas la réponse)
+    if (this.googleCalendar.isConfigured) {
+      this.googleCalendar.createEvent({
+        title: event.title,
+        start_date: event.start_date,
+        end_date: event.end_date ?? undefined,
+        description: event.description ?? undefined,
+        location: event.location ?? undefined,
+        all_day: event.all_day,
+        recurrence: event.recurrence ?? undefined,
+      })
+        .then((gcalEvent) => {
+          if (gcalEvent?.id) {
+            this.supabase.db.from(TABLE).update({ google_event_id: gcalEvent.id }).eq('id', event.id).then()
+          }
+        })
+        .catch((err: Error) => this.logger.warn(`GCal create failed: ${err.message}`))
+    }
+
+    return event
   }
 
   async findAll(userId?: string): Promise<Event[]> {
@@ -101,15 +128,38 @@ export class EventsService {
       .maybeSingle()
     if (error) throw new Error(error.message)
     if (!data) throw new NotFoundException(`Event #${id} not found`)
-    return data as Event
+    const event = data as Event
+
+    // Sync Google Calendar (best-effort)
+    if (this.googleCalendar.isConfigured && event.google_event_id) {
+      this.googleCalendar.updateEvent(event.google_event_id, {
+        title: updateEventDto.title,
+        start_date: updateEventDto.start_date,
+        end_date: updateEventDto.end_date ?? undefined,
+        description: updateEventDto.description ?? undefined,
+        location: updateEventDto.location ?? undefined,
+      })
+        .catch((err: Error) => this.logger.warn(`GCal update failed: ${err.message}`))
+    }
+
+    return event
   }
 
   async remove(id: string): Promise<void> {
+    // Récupère l'événement pour avoir le google_event_id avant suppression
+    const event = await this.findOne(id).catch(() => null)
+
     const { error } = await this.supabase.db
       .from(TABLE)
       .delete()
       .eq('id', id)
     if (error) throw new Error(error.message)
+
+    // Sync Google Calendar (best-effort)
+    if (this.googleCalendar.isConfigured && event?.google_event_id) {
+      this.googleCalendar.deleteEvent(event.google_event_id)
+        .catch((err: Error) => this.logger.warn(`GCal delete failed: ${err.message}`))
+    }
   }
 
   async search(query: string, userId?: string): Promise<Event[]> {
