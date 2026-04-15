@@ -11,10 +11,6 @@ class MessageDto {
 
 export class ChatRequestDto {
   @IsString()
-  @IsOptional()
-  agent_id?: string
-
-  @IsString()
   message: string
 
   @IsString()

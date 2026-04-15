@@ -620,3 +620,28 @@ export const TRAINING_CAMP_TOOLS: ChatCompletionTool[] = [
 
 // Agents qui peuvent utiliser les outils Training Camp
 export const AGENTS_WITH_TRAINING_CAMP = ['coach_sport']
+
+// Outil d'extraction de recette depuis une URL
+export const RECIPE_URL_TOOL: ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'extract_recipe_from_url',
+    description:
+      "Extrait une recette depuis une URL (blog culinaire, site de recettes, etc.) et la sauvegarde. " +
+      "Utilise cet outil quand l'utilisateur partage un lien et demande d'importer, récupérer ou sauvegarder la recette.",
+    parameters: {
+      type: 'object',
+      properties: {
+        url: {
+          type: 'string',
+          description: "L'URL complète de la page contenant la recette (ex: https://marmiton.org/recettes/...)",
+        },
+        save: {
+          type: 'boolean',
+          description: 'Si true, sauvegarde automatiquement la recette extraite dans Recipe AI (défaut: true)',
+        },
+      },
+      required: ['url'],
+    },
+  },
+}
