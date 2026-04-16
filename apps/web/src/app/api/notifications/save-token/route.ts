@@ -11,8 +11,8 @@ export async function POST(request: Request) {
     }
 
     const { token } = await request.json()
-    if (!token) {
-      return NextResponse.json({ error: 'Token manquant' }, { status: 400 })
+    if (!token || typeof token !== 'string' || token.length > 512) {
+      return NextResponse.json({ error: 'Token invalide' }, { status: 400 })
     }
 
     const { error } = await supabase

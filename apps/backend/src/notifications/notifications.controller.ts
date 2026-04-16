@@ -58,8 +58,15 @@ export class NotificationsController {
     return this.notificationsService.remove(id);
   }
 
+  // Endpoint de test uniquement disponible en développement
   @Post('test-push')
   async testPush(@Body() body: { token: string }): Promise<{ success: boolean }> {
+    if (process.env.NODE_ENV === 'production') {
+      return { success: false };
+    }
+    if (!body.token || typeof body.token !== 'string') {
+      return { success: false };
+    }
     const success = await this.fcmService.sendToToken(body.token, {
       title: 'Test FamilyHub 🎉',
       body: 'Les notifications push fonctionnent !',

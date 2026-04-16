@@ -117,9 +117,14 @@ export class EmailAnalyzerService {
 
     if (existing) return
 
-    const prompt = `De : ${message.from}
-Objet : ${message.subject}
-Contenu : ${message.body.slice(0, 500)}`
+    // Nettoie les champs pour éviter l'injection de prompt
+    const safeFrom = message.from.replace(/[<>]/g, '').slice(0, 100)
+    const safeSubject = message.subject.replace(/[^\w\s.,!?@:()\-éèêëàâùûüîïôœç]/gi, '').slice(0, 150)
+    const safeBody = message.body.replace(/```|<\/?[^>]+>/g, '').slice(0, 500)
+
+    const prompt = `De : ${safeFrom}
+Objet : ${safeSubject}
+Contenu : ${safeBody}`
 
     let analysis: EmailAnalysis
 

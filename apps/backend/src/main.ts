@@ -11,7 +11,11 @@ async function bootstrap() {
   });
 
   app.setGlobalPrefix('api');
-  app.enableCors();
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:3002').split(',');
+  app.enableCors({
+    origin: allowedOrigins,
+    credentials: true,
+  });
   app.use(json({ limit: '10mb' }));
 
     // Validation DTO
