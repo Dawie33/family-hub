@@ -15,7 +15,7 @@ const NAV_ITEMS = [
   { href: '/schedule',   icon: '🗓️', label: 'Emploi du temps' },
   { href: '/recipes',    icon: '🍴', label: 'Repas' },
   { href: '/training',   icon: '💪', label: 'Sport' },
-  { href: '/location',   icon: '📍', label: 'Partage de position' },
+  { href: '/emails',     icon: '✉️', label: 'Emails' },
   { href: '/agent',      icon: '💬', label: 'Messages' },
   { href: '/gallery',    icon: '🖼️', label: 'Galerie' },
   { href: '/directory',  icon: '👥', label: 'Répertoire' },

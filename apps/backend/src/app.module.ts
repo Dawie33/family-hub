@@ -15,6 +15,7 @@ import { TrainingCampModule } from './training-camp/training-camp.module'
 import { RecipeAiModule } from './recipe-ai/recipe-ai.module'
 import { ShoppingModule } from './shopping/shopping.module'
 import { FcmModule } from './fcm/fcm.module'
+import { GmailModule } from './gmail/gmail.module'
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { FcmModule } from './fcm/fcm.module'
     RecipeAiModule,
     ShoppingModule,
     FcmModule,
+    GmailModule,
   ],
 })
 export class AppModule {}

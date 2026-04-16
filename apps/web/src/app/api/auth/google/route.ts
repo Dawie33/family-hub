@@ -6,6 +6,7 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3002';
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/userinfo.email',
+  'https://www.googleapis.com/auth/gmail.readonly',
 ].join(' ');
 
 export async function GET() {
