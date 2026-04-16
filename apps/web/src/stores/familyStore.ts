@@ -125,7 +125,13 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
 
       if (error) throw error;
 
-      // Synchro Google Calendar (best-effort, n'échoue pas si non connecté)
+      // Ajoute l'événement dans le store immédiatement
+      set((state) => ({
+        events: [...state.events, data as CalendarEvent],
+        isLoading: false,
+      }));
+
+      // Synchro Google Calendar (best-effort) — met à jour google_event_id dans le store après
       fetch('/api/google/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -138,12 +144,17 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
           description: data.description,
           location: data.location,
         }),
+      }).then(async (res) => {
+        if (!res.ok) return;
+        const { google_event_id } = await res.json() as { google_event_id?: string };
+        if (!google_event_id) return;
+        // Met à jour le store avec le google_event_id pour que la suppression fonctionne
+        set((state) => ({
+          events: state.events.map((ev) =>
+            ev.id === data.id ? { ...ev, google_event_id } : ev
+          ),
+        }));
       }).catch(() => {});
-
-      set((state) => ({
-        events: [...state.events, data as CalendarEvent],
-        isLoading: false,
-      }));
     } catch (error) {
       console.error('[addEvent]', error);
       set({ error: (error as Error).message, isLoading: false });
@@ -158,12 +169,13 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
       // Récupère le google_event_id avant suppression
       const eventToDelete = get().events.find((ev) => ev.id === id);
 
-      const { error } = await supabase
+      const { error, count } = await supabase
         .from('family_events')
-        .delete()
+        .delete({ count: 'exact' })
         .eq('id', id);
 
       if (error) throw error;
+      if (count === 0) throw new Error('Suppression refusée — vérifie les permissions Supabase');
 
       // Supprime aussi dans Google Calendar si l'événement y est synchronisé
       const googleEventId = (eventToDelete as (CalendarEvent & { google_event_id?: string }) | undefined)?.google_event_id;
@@ -180,6 +192,7 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
     } catch (error) {
       console.error('[deleteEvent]', error);
       set({ error: (error as Error).message, isLoading: false });
+      throw error;
     }
   },
 }));

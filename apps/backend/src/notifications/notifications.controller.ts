@@ -2,6 +2,7 @@ import { Controller, Get, Post, Patch, Delete, Param, Body, Sse } from '@nestjs/
 import { Observable, map } from 'rxjs';
 import { NotificationsService } from './notifications.service';
 import { CreateNotificationDto, NotificationDto } from './dto/notification.dto';
+import { FcmService } from '../fcm/fcm.service';
 
 interface MessageEvent {
   data: string;
@@ -9,7 +10,10 @@ interface MessageEvent {
 
 @Controller('notifications')
 export class NotificationsController {
-  constructor(private readonly notificationsService: NotificationsService) {}
+  constructor(
+    private readonly notificationsService: NotificationsService,
+    private readonly fcmService: FcmService,
+  ) {}
 
   @Sse('stream')
   stream(): Observable<MessageEvent> {
@@ -52,5 +56,14 @@ export class NotificationsController {
   @Delete(':id')
   async remove(@Param('id') id: string): Promise<void> {
     return this.notificationsService.remove(id);
+  }
+
+  @Post('test-push')
+  async testPush(@Body() body: { token: string }): Promise<{ success: boolean }> {
+    const success = await this.fcmService.sendToToken(body.token, {
+      title: 'Test FamilyHub 🎉',
+      body: 'Les notifications push fonctionnent !',
+    });
+    return { success };
   }
 }

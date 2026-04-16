@@ -9,12 +9,14 @@ import { MemoryService } from '../memory/memory.service'
 import { ChatRequestDto, ChatResponseDto } from './dto/chat.dto'
 import {
   AGENDA_TOOLS,
+  PUSH_NOTIFICATION_TOOL,
   RECIPE_AI_TOOLS,
   RECIPE_URL_TOOL,
   TRAINING_CAMP_TOOLS,
 } from './chat.contantes'
 import { SearchService } from './services/search.service'
 import { RecipeExtractorService } from './services/recipe-extractor.service'
+import { FcmService } from '../fcm/fcm.service'
 import { TrainingCampClient } from '../training-camp/training-camp.service'
 import { RecipeAiClient } from '../recipe-ai/recipe-ai.service'
 import { SupabaseService } from '../database/supabase.service'
@@ -103,6 +105,7 @@ export class ChatService {
     private recipeAiClient: RecipeAiClient,
     private supabase: SupabaseService,
     private recipeExtractorService: RecipeExtractorService,
+    private fcmService: FcmService,
   ) {}
 
   async chat(chatRequest: ChatRequestDto): Promise<ChatResponseDto> {
@@ -220,6 +223,7 @@ export class ChatService {
       ...AGENDA_TOOLS,
       IMAGE_GENERATION_TOOL,
       RECIPE_URL_TOOL,
+      PUSH_NOTIFICATION_TOOL,
     ]
 
     if (this.recipeAiClient.isConfigured) {
@@ -264,6 +268,10 @@ export class ChatService {
         // Extraction URL
         else if (call.name === 'extract_recipe_from_url') {
           result = await this.executeRecipeUrlExtraction(call)
+        }
+        // Notification push
+        else if (call.name === 'send_push_notification') {
+          result = await this.executePushNotification(call)
         }
         else {
           result = { error: `Outil inconnu: ${call.name}` }
@@ -427,6 +435,29 @@ export class ChatService {
     const url = await this.aiService.generateImage(finalPrompt, '1024x1024', 'standard')
     if (!url) throw new Error('DALL-E n\'a pas retourné d\'image')
     return { url, prompt: finalPrompt }
+  }
+
+  // ─── Outil Notification Push ───────────────────────────────────────────────
+
+  private async executePushNotification(call: FunctionCall): Promise<any> {
+    const { title, body } = call.arguments
+
+    // Récupère tous les tokens FCM des membres de la famille
+    const { data: members } = await this.supabase.db
+      .from('family_members')
+      .select('fcm_token')
+      .not('fcm_token', 'is', null)
+
+    const tokens = (members ?? [])
+      .map((m: any) => m.fcm_token as string)
+      .filter(Boolean)
+
+    if (tokens.length === 0) {
+      return { sent: 0, message: 'Aucun appareil enregistré pour les notifications' }
+    }
+
+    const sent = await this.fcmService.sendToTokens(tokens, { title: title as string, body: body as string })
+    return { sent, total: tokens.length }
   }
 
   // ─── Outil Extraction URL ──────────────────────────────────────────────────

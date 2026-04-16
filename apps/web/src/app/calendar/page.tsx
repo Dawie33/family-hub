@@ -38,7 +38,7 @@ interface GoogleRawEvent {
 }
 
 export default function CalendarPage() {
-  const { events, fetchEvents, addEvent, deleteEvent } = useFamilyStore();
+  const { family, events, fetchEvents, fetchFamily, addEvent, deleteEvent } = useFamilyStore();
   const [googleEvents, setGoogleEvents] = useState<{
     id: string; title: string; start: string;
     backgroundColor: string; borderColor: string;
@@ -49,10 +49,12 @@ export default function CalendarPage() {
 
   const [showForm, setShowForm] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
-  const [form, setForm] = useState<{ title: string; category: EventCategory; description: string }>({
+  const [form, setForm] = useState<{ title: string; category: EventCategory; description: string; time: string; allDay: boolean }>({
     title: '',
     category: 'other',
     description: '',
+    time: '09:00',
+    allDay: false,
   });
   const [saving, setSaving] = useState(false);
 
@@ -60,8 +62,12 @@ export default function CalendarPage() {
     id: string; title: string; category: EventCategory; date: string; source: string;
   } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  useEffect(() => { fetchEvents(); }, [fetchEvents]);
+  useEffect(() => {
+    if (!family) fetchFamily().catch(() => {});
+    fetchEvents();
+  }, [family, fetchFamily, fetchEvents]);
 
   function loadGoogleEvents(year: number, month: number) {
     fetch(`/api/google/events?year=${year}&month=${month}`)
@@ -96,28 +102,49 @@ export default function CalendarPage() {
     extendedProps: { source: 'local', category: ev.category, description: ev.description },
   }));
 
-  const allEvents = [...localEvents, ...googleEvents];
+  // Exclut les events Google qui sont déjà présents comme événements locaux (synchro bidirectionnelle)
+  const syncedGoogleIds = new Set(
+    events
+      .map((ev) => (ev as CalendarEvent & { google_event_id?: string }).google_event_id)
+      .filter(Boolean)
+  );
+  const filteredGoogleEvents = googleEvents.filter(
+    (gev) => !syncedGoogleIds.has(gev.id.replace('google-', ''))
+  );
+
+  const allEvents = [...localEvents, ...filteredGoogleEvents];
 
   async function handleDeleteEvent() {
     if (!selectedEvent) return;
     setDeleting(true);
-    await deleteEvent(selectedEvent.id);
-    setDeleting(false);
-    setSelectedEvent(null);
+    setDeleteError(null);
+    try {
+      await deleteEvent(selectedEvent.id);
+      setSelectedEvent(null);
+    } catch (err) {
+      setDeleteError((err as Error).message);
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function handleAddEvent(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!form.title.trim()) return;
     setSaving(true);
+    // new Date('YYYY-MM-DDTHH:mm:ss') est interprété comme heure locale par le navigateur
+    // .toISOString() le convertit ensuite en UTC pour Supabase
+    const startDate = form.allDay
+      ? selectedDate
+      : new Date(`${selectedDate}T${form.time}:00`).toISOString();
     await addEvent({
       title: form.title,
       category: form.category,
       description: form.description,
-      start_date: selectedDate,
-      end_date: selectedDate,
+      start_date: startDate,
+      end_date: startDate,
     });
-    setForm({ title: '', category: 'other', description: '' });
+    setForm({ title: '', category: 'other', description: '', time: '09:00', allDay: false });
     setShowForm(false);
     setSaving(false);
   }
@@ -216,12 +243,12 @@ export default function CalendarPage() {
         <div
           className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-4"
           style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
-          onClick={(e) => { if (e.target === e.currentTarget) setSelectedEvent(null); }}
+          onClick={(e) => { if (e.target === e.currentTarget) { setSelectedEvent(null); setDeleteError(null); } }}
         >
           <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
               <h2 className="font-bold text-sm" style={{ color: '#11253E' }}>Détail de l&apos;événement</h2>
-              <button onClick={() => setSelectedEvent(null)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+              <button onClick={() => { setSelectedEvent(null); setDeleteError(null); }} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
             </div>
             <div className="px-5 py-4 space-y-3">
               <div className="flex items-center gap-3">
@@ -234,6 +261,9 @@ export default function CalendarPage() {
               <p className="text-xs" style={{ color: '#999' }}>
                 {CATEGORY_LABELS[selectedEvent.category]} · {new Date(selectedEvent.date + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
               </p>
+              {deleteError && (
+                <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{deleteError}</p>
+              )}
               <button
                 onClick={handleDeleteEvent}
                 disabled={deleting}
@@ -286,6 +316,29 @@ export default function CalendarPage() {
                   ))}
                 </select>
               </div>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.allDay}
+                    onChange={(e) => setForm(f => ({ ...f, allDay: e.target.checked }))}
+                    className="w-4 h-4 rounded accent-blue-500"
+                  />
+                  <span className="text-xs font-semibold" style={{ color: '#585858' }}>Journée entière</span>
+                </label>
+              </div>
+              {!form.allDay && (
+                <div>
+                  <label className="block text-xs font-semibold mb-1.5" style={{ color: '#585858' }}>Heure</label>
+                  <input
+                    type="time"
+                    value={form.time}
+                    onChange={(e) => setForm(f => ({ ...f, time: e.target.value }))}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-400 transition-colors"
+                    style={{ color: '#32325D' }}
+                  />
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-semibold mb-1.5" style={{ color: '#585858' }}>Note (optionnel)</label>
                 <input

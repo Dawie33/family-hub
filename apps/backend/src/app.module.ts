@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
+import { ScheduleModule } from '@nestjs/schedule'
 import { DatabaseModule } from './database/database.module'
 import { AIModule } from './ai/ai.module'
 import { AgentsModule } from './agents/agents.module'
@@ -13,6 +14,7 @@ import { RecipesModule } from './recipes/recipes.module'
 import { TrainingCampModule } from './training-camp/training-camp.module'
 import { RecipeAiModule } from './recipe-ai/recipe-ai.module'
 import { ShoppingModule } from './shopping/shopping.module'
+import { FcmModule } from './fcm/fcm.module'
 
 @Module({
   imports: [
@@ -20,6 +22,7 @@ import { ShoppingModule } from './shopping/shopping.module'
       isGlobal: true,
       envFilePath: '../../.env',
     }),
+    ScheduleModule.forRoot(),
     DatabaseModule,
     AIModule,
     AgentsModule,
@@ -33,6 +36,7 @@ import { ShoppingModule } from './shopping/shopping.module'
     TrainingCampModule,
     RecipeAiModule,
     ShoppingModule,
+    FcmModule,
   ],
 })
 export class AppModule {}

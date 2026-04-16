@@ -6,7 +6,9 @@ import helmet from 'helmet'
 import { json } from 'express'
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    logger: ['log', 'warn', 'error', 'debug'],
+  });
 
   app.setGlobalPrefix('api');
   app.enableCors();

@@ -621,6 +621,31 @@ export const TRAINING_CAMP_TOOLS: ChatCompletionTool[] = [
 // Agents qui peuvent utiliser les outils Training Camp
 export const AGENTS_WITH_TRAINING_CAMP = ['coach_sport']
 
+// Outil de notification push
+export const PUSH_NOTIFICATION_TOOL: ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'send_push_notification',
+    description:
+      "Envoie une notification push à tous les membres de la famille. " +
+      "Utilise cet outil quand l'utilisateur demande d'envoyer un rappel, une alerte ou une notification à la famille.",
+    parameters: {
+      type: 'object',
+      properties: {
+        title: {
+          type: 'string',
+          description: "Titre court de la notification (ex: 'Rappel dentiste')",
+        },
+        body: {
+          type: 'string',
+          description: "Corps du message (ex: 'RDV dentiste demain à 14h !')",
+        },
+      },
+      required: ['title', 'body'],
+    },
+  },
+}
+
 // Outil d'extraction de recette depuis une URL
 export const RECIPE_URL_TOOL: ChatCompletionTool = {
   type: 'function',
