@@ -3,14 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server';
 
 const TRAINING_CAMP_API = process.env.TRAINING_CAMP_API || 'https://training-camp-backend.onrender.com/api';
 
-function extractSessionCookie(setCookieHeader: string | null): string | null {
-  if (!setCookieHeader) return null;
-  // Extrait la partie "name=value" avant le premier ";"
-  const match = setCookieHeader.match(/^([^;]+)/);
-  return match ? match[1] : null;
-}
-
-async function loginAndGetCookie(
+async function loginAndGetToken(
   memberId: string,
   email: string,
   password: string,
@@ -25,17 +18,18 @@ async function loginAndGetCookie(
 
     if (!res.ok) return null;
 
-    const cookie = extractSessionCookie(res.headers.get('set-cookie'));
-    if (!cookie) return null;
+    const body = await res.json().catch(() => null);
+    const token = body?.access_token ?? null;
+    if (!token) return null;
 
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     await supabase
       .from('member_integrations')
-      .update({ access_token: cookie, token_expires_at: expiresAt, status: 'active' })
+      .update({ access_token: token, token_expires_at: expiresAt, status: 'active' })
       .eq('member_id', memberId)
       .eq('provider', 'training-camp');
 
-    return cookie;
+    return token;
   } catch {
     return null;
   }
@@ -71,14 +65,14 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Compte Training-Camp non lié', code: 'NOT_LINKED' }, { status: 403 });
     }
 
-    // Si pas de cookie ou expiré → re-login
-    let cookie = integration.access_token;
-    if (!cookie || integration.status === 'expired') {
+    // Si pas de token ou expiré → re-login
+    let token = integration.access_token;
+    if (!token || integration.status === 'expired') {
       if (!integration.provider_email || !integration.provider_password) {
         return NextResponse.json({ error: 'Compte Training-Camp non lié', code: 'NOT_LINKED' }, { status: 403 });
       }
-      cookie = await loginAndGetCookie(member.id, integration.provider_email, integration.provider_password, supabase);
-      if (!cookie) {
+      token = await loginAndGetToken(member.id, integration.provider_email, integration.provider_password, supabase);
+      if (!token) {
         return NextResponse.json({ error: 'Impossible de se connecter à Training-Camp', code: 'NOT_LINKED' }, { status: 403 });
       }
     }
@@ -88,20 +82,20 @@ export async function GET(request: Request) {
     const offset = searchParams.get('offset') || '0';
 
     const res = await fetch(`${TRAINING_CAMP_API}/workout-sessions?limit=${limit}&offset=${offset}`, {
-      headers: { Cookie: cookie, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     });
 
-    // Session expirée → re-login et retry
+    // Token expiré → re-login et retry
     if (res.status === 401) {
       if (!integration.provider_email || !integration.provider_password) {
         return NextResponse.json({ error: 'Session expirée, veuillez re-lier votre compte', code: 'TOKEN_EXPIRED' }, { status: 403 });
       }
-      const newCookie = await loginAndGetCookie(member.id, integration.provider_email, integration.provider_password, supabase);
-      if (!newCookie) {
+      const newToken = await loginAndGetToken(member.id, integration.provider_email, integration.provider_password, supabase);
+      if (!newToken) {
         return NextResponse.json({ error: 'Session expirée, veuillez re-lier votre compte', code: 'TOKEN_EXPIRED' }, { status: 403 });
       }
       const retryRes = await fetch(`${TRAINING_CAMP_API}/workout-sessions?limit=${limit}&offset=${offset}`, {
-        headers: { Cookie: newCookie, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${newToken}`, 'Content-Type': 'application/json' },
       });
       if (!retryRes.ok) {
         return NextResponse.json({ error: `Erreur Training-Camp (${retryRes.status})` }, { status: retryRes.status });

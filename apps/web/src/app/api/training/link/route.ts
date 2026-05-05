@@ -54,12 +54,22 @@ export async function POST(request: Request) {
     });
 
     if (!res.ok) {
-      return NextResponse.json({ error: 'Identifiants Training-Camp invalides' }, { status: 400 });
+      if (res.status === 401 || res.status === 400) {
+        return NextResponse.json({ error: 'Identifiants Training-Camp invalides' }, { status: 400 });
+      }
+      return NextResponse.json(
+        { error: `Serveur Training-Camp indisponible (${res.status}), réessaie dans quelques secondes` },
+        { status: 502 },
+      );
     }
 
-    // TC utilise des cookies de session, pas de JWT
-    const setCookieHeader = res.headers.get('set-cookie');
-    const cookie = setCookieHeader?.match(/^([^;]+)/)?.[1] ?? null;
+    // Training-Camp retourne un JWT dans le body
+    const body = await res.json().catch(() => null);
+    const cookie = body?.access_token ?? null;
+
+    if (!cookie) {
+      return NextResponse.json({ error: 'Réponse Training-Camp invalide' }, { status: 502 });
+    }
 
     // Récupère le member_id lié à cet utilisateur Supabase
     const { data: member } = await supabase
