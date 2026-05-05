@@ -2,33 +2,40 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import {
+  Home, Calendar, Gift, List, Wallet, FolderOpen, Clock,
+  Utensils, Dumbbell, Mail, MessageCircle, Images, Users,
+  Settings, HelpCircle, LogOut, type LucideIcon,
+} from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { useFamilyStore } from '@/stores/familyStore';
 
-const NAV_ITEMS = [
-  { href: '/',           icon: '🏠', label: 'Activité' },
-  { href: '/calendar',   icon: '📅', label: 'Calendrier' },
-  { href: '/birthdays',  icon: '🎂', label: 'Anniversaires' },
-  { href: '/lists',      icon: '📝', label: 'Listes' },
-  { href: '/budget',     icon: '💰', label: 'Budget' },
-  { href: '/documents',  icon: '📁', label: 'Documents' },
-  { href: '/schedule',   icon: '🗓️', label: 'Emploi du temps' },
-  { href: '/recipes',    icon: '🍴', label: 'Repas' },
-  { href: '/training',   icon: '💪', label: 'Sport' },
-  { href: '/emails',     icon: '✉️', label: 'Emails' },
-  { href: '/agent',      icon: '💬', label: 'Messages' },
-  { href: '/gallery',    icon: '🖼️', label: 'Galerie' },
-  { href: '/directory',  icon: '👥', label: 'Répertoire' },
-  { href: '/settings',   icon: '⚙️', label: 'Paramètres' },
-  { href: '/help',       icon: '❓', label: 'Aide' },
+interface NavItem { href: string; Icon: LucideIcon; label: string }
+
+const NAV_ITEMS: NavItem[] = [
+  { href: '/',          Icon: Home,           label: 'Activité' },
+  { href: '/calendar',  Icon: Calendar,       label: 'Calendrier' },
+  { href: '/birthdays', Icon: Gift,           label: 'Anniversaires' },
+  { href: '/lists',     Icon: List,           label: 'Listes' },
+  { href: '/budget',    Icon: Wallet,         label: 'Budget' },
+  { href: '/documents', Icon: FolderOpen,     label: 'Documents' },
+  { href: '/schedule',  Icon: Clock,          label: 'Emploi du temps' },
+  { href: '/recipes',   Icon: Utensils,       label: 'Repas' },
+  { href: '/training',  Icon: Dumbbell,       label: 'Sport' },
+  { href: '/emails',    Icon: Mail,           label: 'Emails' },
+  { href: '/agent',     Icon: MessageCircle,  label: 'Messages' },
+  { href: '/gallery',   Icon: Images,         label: 'Galerie' },
+  { href: '/directory', Icon: Users,          label: 'Répertoire' },
+  { href: '/settings',  Icon: Settings,       label: 'Paramètres' },
+  { href: '/help',      Icon: HelpCircle,     label: 'Aide' },
 ];
 
-const MOBILE_ITEMS = [
-  { href: '/',          icon: '🏠', label: 'Accueil' },
-  { href: '/calendar',  icon: '📅', label: 'Agenda' },
-  { href: '/lists',     icon: '📝', label: 'Listes' },
-  { href: '/recipes',   icon: '🍴', label: 'Repas' },
-  { href: '/agent',     icon: '💬', label: 'Messages' },
+const MOBILE_ITEMS: NavItem[] = [
+  { href: '/',         Icon: Home,          label: 'Accueil' },
+  { href: '/calendar', Icon: Calendar,      label: 'Agenda' },
+  { href: '/lists',    Icon: List,          label: 'Listes' },
+  { href: '/recipes',  Icon: Utensils,      label: 'Repas' },
+  { href: '/agent',    Icon: MessageCircle, label: 'Messages' },
 ];
 
 export default function Sidebar() {
@@ -48,14 +55,14 @@ export default function Sidebar() {
     <>
       {/* ── Sidebar desktop ── */}
       <aside
-        className="hidden lg:flex flex-col fixed top-0 left-0 bottom-0 z-40 w-56 border-r"
+        className="hidden lg:flex flex-col fixed top-14 left-0 bottom-0 z-40 w-56 border-r"
         style={{ backgroundColor: '#fff', borderColor: '#EBEBEB' }}
       >
         {/* Logo / famille */}
-        <div className="px-4 py-5 border-b" style={{ borderColor: '#EBEBEB' }}>
+        <div className="px-4 py-4 border-b" style={{ borderColor: '#EBEBEB' }}>
           <Link href="/" className="flex items-center gap-3">
             <div
-              className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
+              className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-base flex-shrink-0"
               style={{ background: 'linear-gradient(135deg, #4784EC, #32325D)' }}
             >
               {family?.name?.[0]?.toUpperCase() ?? 'F'}
@@ -73,26 +80,26 @@ export default function Sidebar() {
 
         {/* Nav items */}
         <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
-          {NAV_ITEMS.map(({ href, icon, label }) => {
+          {NAV_ITEMS.map(({ href, Icon, label }) => {
             const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
             return (
               <Link
                 key={href}
                 href={href}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors"
+                className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors"
                 style={
                   isActive
                     ? { backgroundColor: '#EFF4FD', color: '#4784EC' }
-                    : { color: '#444', backgroundColor: 'transparent' }
+                    : { color: '#555', backgroundColor: 'transparent' }
                 }
-                onMouseEnter={(e) => {
-                  if (!isActive) (e.currentTarget as HTMLElement).style.backgroundColor = '#F7F8FA';
+                onMouseEnter={(e: React.MouseEvent<HTMLAnchorElement>) => {
+                  if (!isActive) e.currentTarget.style.backgroundColor = '#F7F8FA';
                 }}
-                onMouseLeave={(e) => {
-                  if (!isActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                onMouseLeave={(e: React.MouseEvent<HTMLAnchorElement>) => {
+                  if (!isActive) e.currentTarget.style.backgroundColor = 'transparent';
                 }}
               >
-                <span className="text-base w-5 text-center">{icon}</span>
+                <Icon size={17} className="flex-shrink-0" strokeWidth={1.75} />
                 {label}
               </Link>
             );
@@ -115,9 +122,10 @@ export default function Sidebar() {
             </div>
             <button
               onClick={handleSignOut}
-              className="w-full text-xs py-2 rounded-xl font-semibold transition-colors"
+              className="w-full flex items-center justify-center gap-1.5 text-xs py-2 rounded-xl font-semibold transition-colors"
               style={{ backgroundColor: '#FEE2E2', color: '#DC2626' }}
             >
+              <LogOut size={13} strokeWidth={2} />
               Déconnexion
             </button>
           </div>
@@ -130,7 +138,7 @@ export default function Sidebar() {
         style={{ backgroundColor: '#fff', borderColor: '#EBEBEB' }}
       >
         <div className="flex justify-around py-2">
-          {MOBILE_ITEMS.map(({ href, icon, label }) => {
+          {MOBILE_ITEMS.map(({ href, Icon, label }) => {
             const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
             return (
               <Link
@@ -138,7 +146,11 @@ export default function Sidebar() {
                 href={href}
                 className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl"
               >
-                <span className="text-xl">{icon}</span>
+                <Icon
+                  size={22}
+                  strokeWidth={1.75}
+                  style={{ color: isActive ? '#4784EC' : '#999' }}
+                />
                 <span className="text-xs font-medium" style={{ color: isActive ? '#4784EC' : '#999' }}>
                   {label}
                 </span>
