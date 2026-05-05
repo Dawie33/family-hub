@@ -34,33 +34,91 @@ export class GmailService {
     return data.access_token
   }
 
-  async fetchNewMessages(accessToken: string, since: Date): Promise<GmailMessage[]> {
-    // Recherche les emails non lus reçus depuis la dernière vérification
-    const afterTimestamp = Math.floor(since.getTime() / 1000)
-    const query = `is:unread after:${afterTimestamp}`
+  async fetchNewMessages(accessToken: string, since: Date | null): Promise<GmailMessage[]> {
+    const query = since
+      ? `is:unread in:inbox after:${Math.floor(since.getTime() / 1000)}`
+      : 'in:inbox'
 
-    const listRes = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages?` +
-      new URLSearchParams({ q: query, maxResults: '20' }),
-      { headers: { Authorization: `Bearer ${accessToken}` } },
-    )
+    // Mode manuel : pagine jusqu'à vider la boîte de réception
+    const allIds: string[] = []
+    let pageToken: string | undefined
 
-    if (!listRes.ok) {
-      this.logger.error(`Gmail list error: ${listRes.status}`)
-      return []
-    }
+    do {
+      const params: Record<string, string> = { q: query, maxResults: since ? '20' : '500' }
+      if (pageToken) params.pageToken = pageToken
 
-    const listData = await listRes.json() as { messages?: { id: string }[] }
-    if (!listData.messages?.length) return []
+      const listRes = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages?` + new URLSearchParams(params),
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      )
+
+      if (!listRes.ok) {
+        const errBody = await listRes.text()
+        this.logger.error(`Gmail list error: ${listRes.status} — ${errBody.slice(0, 300)}`)
+        break
+      }
+
+      const listData = await listRes.json() as { messages?: { id: string }[]; nextPageToken?: string }
+      if (listData.messages?.length) allIds.push(...listData.messages.map(m => m.id))
+      pageToken = since ? undefined : listData.nextPageToken
+
+    } while (pageToken)
+
+    if (!allIds.length) return []
 
     const messages: GmailMessage[] = []
-
-    for (const { id } of listData.messages) {
+    for (const id of allIds) {
       const msg = await this.fetchMessage(accessToken, id)
       if (msg) messages.push(msg)
     }
 
     return messages
+  }
+
+  async listLabels(accessToken: string): Promise<Map<string, string>> {
+    const res = await fetch(
+      'https://gmail.googleapis.com/gmail/v1/users/me/labels',
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    )
+    if (!res.ok) return new Map()
+    const data = await res.json() as { labels: { id: string; name: string }[] }
+    return new Map(data.labels.map(l => [l.name, l.id]))
+  }
+
+  async getOrCreateLabel(
+    accessToken: string,
+    name: string,
+    cache: Map<string, string>,
+  ): Promise<string | null> {
+    if (cache.has(name)) return cache.get(name)!
+
+    const res = await fetch(
+      'https://gmail.googleapis.com/gmail/v1/users/me/labels',
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      },
+    )
+    if (!res.ok) return null
+    const label = await res.json() as { id: string; name: string }
+    cache.set(label.name, label.id)
+    return label.id
+  }
+
+  async moveToLabel(accessToken: string, messageId: string, labelId: string | null): Promise<void> {
+    const body = labelId
+      ? { addLabelIds: [labelId], removeLabelIds: ['INBOX'] }
+      : { removeLabelIds: ['INBOX'] }
+
+    await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+    )
   }
 
   private async fetchMessage(accessToken: string, id: string): Promise<GmailMessage | null> {

@@ -3,7 +3,14 @@ import { createSupabaseServerClient } from '@/lib/supabase-server';
 
 const TRAINING_CAMP_API = process.env.TRAINING_CAMP_API || 'https://training-camp-backend.onrender.com/api';
 
-async function refreshToken(
+function extractSessionCookie(setCookieHeader: string | null): string | null {
+  if (!setCookieHeader) return null;
+  // Extrait la partie "name=value" avant le premier ";"
+  const match = setCookieHeader.match(/^([^;]+)/);
+  return match ? match[1] : null;
+}
+
+async function loginAndGetCookie(
   memberId: string,
   email: string,
   password: string,
@@ -15,15 +22,20 @@ async function refreshToken(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
+
     if (!res.ok) return null;
-    const { access_token } = await res.json();
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    const cookie = extractSessionCookie(res.headers.get('set-cookie'));
+    if (!cookie) return null;
+
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     await supabase
       .from('member_integrations')
-      .update({ access_token, token_expires_at: expiresAt, status: 'active' })
+      .update({ access_token: cookie, token_expires_at: expiresAt, status: 'active' })
       .eq('member_id', memberId)
       .eq('provider', 'training-camp');
-    return access_token;
+
+    return cookie;
   } catch {
     return null;
   }
@@ -38,7 +50,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
     }
 
-    // Récupère le member_id
     const { data: member } = await supabase
       .from('family_members')
       .select('id')
@@ -49,7 +60,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Membre introuvable' }, { status: 404 });
     }
 
-    // Récupère le token TC du membre
     const { data: integration } = await supabase
       .from('member_integrations')
       .select('access_token, token_expires_at, provider_email, provider_password, status')
@@ -61,17 +71,16 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Compte Training-Camp non lié', code: 'NOT_LINKED' }, { status: 403 });
     }
 
-    // Si expiré mais credentials stockés → re-login silencieux
-    let token = integration.access_token;
-    if (integration.status === 'expired' || !token) {
+    // Si pas de cookie ou expiré → re-login
+    let cookie = integration.access_token;
+    if (!cookie || integration.status === 'expired') {
       if (!integration.provider_email || !integration.provider_password) {
         return NextResponse.json({ error: 'Compte Training-Camp non lié', code: 'NOT_LINKED' }, { status: 403 });
       }
-      const newToken = await refreshToken(member.id, integration.provider_email, integration.provider_password, supabase);
-      if (!newToken) {
-        return NextResponse.json({ error: 'Compte Training-Camp non lié', code: 'NOT_LINKED' }, { status: 403 });
+      cookie = await loginAndGetCookie(member.id, integration.provider_email, integration.provider_password, supabase);
+      if (!cookie) {
+        return NextResponse.json({ error: 'Impossible de se connecter à Training-Camp', code: 'NOT_LINKED' }, { status: 403 });
       }
-      token = newToken;
     }
 
     const { searchParams } = new URL(request.url);
@@ -79,27 +88,20 @@ export async function GET(request: Request) {
     const offset = searchParams.get('offset') || '0';
 
     const res = await fetch(`${TRAINING_CAMP_API}/workout-sessions?limit=${limit}&offset=${offset}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { Cookie: cookie, 'Content-Type': 'application/json' },
     });
 
-    const rawText = await res.text();
-    console.log(`[training/sessions] status=${res.status} body=${rawText.slice(0, 500)}`);
-
-    // Si Training Camp dit que le token est invalide → re-login automatique puis retry
+    // Session expirée → re-login et retry
     if (res.status === 401) {
       if (!integration.provider_email || !integration.provider_password) {
-        return NextResponse.json({ error: 'Session Training-Camp expirée, veuillez re-lier votre compte', code: 'TOKEN_EXPIRED' }, { status: 403 });
+        return NextResponse.json({ error: 'Session expirée, veuillez re-lier votre compte', code: 'TOKEN_EXPIRED' }, { status: 403 });
       }
-      const newToken = await refreshToken(member.id, integration.provider_email, integration.provider_password, supabase);
-      if (!newToken) {
-        return NextResponse.json({ error: 'Session Training-Camp expirée, veuillez re-lier votre compte', code: 'TOKEN_EXPIRED' }, { status: 403 });
+      const newCookie = await loginAndGetCookie(member.id, integration.provider_email, integration.provider_password, supabase);
+      if (!newCookie) {
+        return NextResponse.json({ error: 'Session expirée, veuillez re-lier votre compte', code: 'TOKEN_EXPIRED' }, { status: 403 });
       }
-      // Retry la requête avec le nouveau token
       const retryRes = await fetch(`${TRAINING_CAMP_API}/workout-sessions?limit=${limit}&offset=${offset}`, {
-        headers: { Authorization: `Bearer ${newToken}`, 'Content-Type': 'application/json' },
+        headers: { Cookie: newCookie, 'Content-Type': 'application/json' },
       });
       if (!retryRes.ok) {
         return NextResponse.json({ error: `Erreur Training-Camp (${retryRes.status})` }, { status: retryRes.status });
@@ -108,24 +110,18 @@ export async function GET(request: Request) {
     }
 
     if (!res.ok) {
-      return NextResponse.json({ error: `Erreur Training-Camp (${res.status})`, detail: rawText.slice(0, 200) }, { status: res.status });
+      const detail = await res.text();
+      return NextResponse.json({ error: `Erreur Training-Camp (${res.status})`, detail: detail.slice(0, 200) }, { status: res.status });
     }
 
-    // Token encore valide : prolonger la date d'expiration locale (30 jours glissants)
+    // Prolonge l'expiration locale
     await supabase
       .from('member_integrations')
-      .update({ token_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() })
+      .update({ token_expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() })
       .eq('member_id', member.id)
       .eq('provider', 'training-camp');
 
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(rawText);
-    } catch {
-      return NextResponse.json({ error: 'Réponse Training-Camp non JSON', detail: rawText.slice(0, 200) }, { status: 502 });
-    }
-
-    return NextResponse.json(parsed);
+    return NextResponse.json(await res.json());
   } catch (error) {
     console.error('[training/sessions]', error);
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });

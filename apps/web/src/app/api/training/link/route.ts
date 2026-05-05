@@ -57,7 +57,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Identifiants Training-Camp invalides' }, { status: 400 });
     }
 
-    const { access_token } = await res.json();
+    // TC utilise des cookies de session, pas de JWT
+    const setCookieHeader = res.headers.get('set-cookie');
+    const cookie = setCookieHeader?.match(/^([^;]+)/)?.[1] ?? null;
 
     // Récupère le member_id lié à cet utilisateur Supabase
     const { data: member } = await supabase
@@ -70,14 +72,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Membre familial introuvable' }, { status: 404 });
     }
 
-    // Upsert dans member_integrations (avec le mot de passe pour le re-login automatique)
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     const { error } = await supabase
       .from('member_integrations')
       .upsert({
         member_id: member.id,
         provider: 'training-camp',
-        access_token,
+        access_token: cookie,
         token_expires_at: expiresAt,
         provider_email: email,
         provider_password: password,

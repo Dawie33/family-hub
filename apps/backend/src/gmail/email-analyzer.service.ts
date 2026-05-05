@@ -9,6 +9,7 @@ interface EmailAnalysis {
   type: 'task' | 'note' | 'ignore'
   title: string
   content: string
+  folder: string
 }
 
 const SYSTEM_PROMPT = `Tu es un assistant familial qui analyse des emails.
@@ -17,7 +18,8 @@ Pour chaque email, réponds UNIQUEMENT avec un JSON valide (sans markdown) :
   "important": true/false,
   "type": "task" | "note" | "ignore",
   "title": "titre court et clair (max 80 caractères)",
-  "content": "résumé ou action à faire (max 300 caractères)"
+  "content": "résumé ou action à faire (max 300 caractères)",
+  "folder": "nom du dossier Gmail (max 30 caractères)"
 }
 
 Règles :
@@ -25,6 +27,9 @@ Règles :
 - "note" : email informatif important (colis livré, résultats scolaires, info école...)
 - "ignore" : publicité, newsletter, promotion, spam
 - important: true si type est task ou note, false si ignore
+- "folder" : nom court et générique qui regroupe les emails du même expéditeur ou thème
+  Exemples : "Ramonage", "École", "Factures EDF", "Amazon", "Médecin", "Banque", "Assurance", "Mairie"
+  Utilise toujours le même nom pour le même expéditeur/thème (pas "EDF Facture" et "Facture EDF")
 - Réponds toujours en français`
 
 @Injectable()
@@ -38,21 +43,37 @@ export class EmailAnalyzerService {
   ) {}
 
   @Cron('0 7 * * *') // tous les jours à 7h du matin
-  async analyzeNewEmails(): Promise<void> {
-    this.logger.debug('Vérification des nouveaux emails...')
+  async analyzeNewEmails(allEmails = false, limit?: number): Promise<{ emails: number; saved: number; archived: number }> {
+    this.logger.log(allEmails ? 'Analyse complète de la boîte...' : 'Vérification des nouveaux emails...')
 
-    // Récupère tous les membres avec une intégration Google active
-    const { data: integrations } = await this.supabase.db
+    const { data: integrations, error } = await this.supabase.db
       .from('member_integrations')
       .select('member_id, access_token, refresh_token, token_expires_at, gmail_last_check')
       .eq('provider', 'google')
       .eq('status', 'active')
 
-    if (!integrations?.length) return
+    if (error) this.logger.error(`Erreur lecture intégrations: ${error.message}`)
+
+    if (!integrations?.length) {
+      this.logger.warn('Aucune intégration Google active trouvée')
+      return { emails: 0, saved: 0, archived: 0 }
+    }
+
+    this.logger.log(`${integrations.length} intégration(s) Google trouvée(s)`)
+
+    let totalEmails = 0
+    let totalSaved = 0
+    let totalArchived = 0
 
     for (const integration of integrations) {
-      await this.processForMember(integration)
+      const stats = await this.processForMember(integration, allEmails, limit)
+      totalEmails += stats.emails
+      totalSaved += stats.saved
+      totalArchived += stats.archived
     }
+
+    this.logger.log(`Terminé : ${totalEmails} emails trouvés, ${totalSaved} sauvegardés, ${totalArchived} archivés`)
+    return { emails: totalEmails, saved: totalSaved, archived: totalArchived }
   }
 
   private async processForMember(integration: {
@@ -61,13 +82,20 @@ export class EmailAnalyzerService {
     refresh_token: string
     token_expires_at: string
     gmail_last_check: string | null
-  }): Promise<void> {
+  }, allEmails = false, limit?: number): Promise<{ emails: number; saved: number; archived: number }> {
     let token = integration.access_token
 
     // Rafraîchit le token si expiré
     if (new Date(integration.token_expires_at) <= new Date()) {
+      if (!integration.refresh_token) {
+        this.logger.error(`Membre ${integration.member_id} : refresh_token absent — l'utilisateur doit re-autoriser Google dans les paramètres`)
+        return { emails: 0, saved: 0, archived: 0 }
+      }
       const newToken = await this.gmail.refreshToken(integration.refresh_token)
-      if (!newToken) return
+      if (!newToken) {
+        this.logger.error(`Membre ${integration.member_id} : échec du refresh Google (token révoqué ?)`)
+        return { emails: 0, saved: 0, archived: 0 }
+      }
       token = newToken
       await this.supabase.db
         .from('member_integrations')
@@ -76,12 +104,14 @@ export class EmailAnalyzerService {
         .eq('provider', 'google')
     }
 
-    // Détermine depuis quand chercher (dernière vérif ou 24h max)
-    const since = integration.gmail_last_check
-      ? new Date(integration.gmail_last_check)
-      : new Date(Date.now() - 24 * 60 * 60 * 1000)
+    const since = allEmails
+      ? null
+      : integration.gmail_last_check
+        ? new Date(integration.gmail_last_check)
+        : new Date(Date.now() - 24 * 60 * 60 * 1000)
 
-    const messages = await this.gmail.fetchNewMessages(token, since)
+    let messages = await this.gmail.fetchNewMessages(token, since)
+    if (limit && messages.length > limit) messages = messages.slice(0, limit)
     this.logger.debug(`Membre ${integration.member_id} : ${messages.length} nouveaux emails`)
 
     // Récupère le family_id du membre
@@ -91,31 +121,41 @@ export class EmailAnalyzerService {
       .eq('id', integration.member_id)
       .single()
 
+    const labelCache = allEmails ? await this.gmail.listLabels(token) : new Map<string, string>()
+
+    let saved = 0
+    let archived = 0
+
     for (const message of messages) {
-      await this.analyzeAndSave(message, integration.member_id, member?.family_id ?? null)
+      const result = await this.analyzeAndSave(message, integration.member_id, member?.family_id ?? null, token, allEmails, labelCache)
+      if (result.saved) saved++
+      if (result.archived) archived++
     }
 
-    // Met à jour la date de dernière vérification
     await this.supabase.db
       .from('member_integrations')
       .update({ gmail_last_check: new Date().toISOString() })
       .eq('member_id', integration.member_id)
       .eq('provider', 'google')
+
+    return { emails: messages.length, saved, archived }
   }
 
   private async analyzeAndSave(
     message: GmailMessage,
     memberId: string,
     familyId: string | null,
-  ): Promise<void> {
-    // Vérifie que cet email n'a pas déjà été traité
+    accessToken: string,
+    archive = false,
+    labelCache = new Map<string, string>(),
+  ): Promise<{ saved: boolean; archived: boolean }> {
     const { data: existing } = await this.supabase.db
       .from('email_tasks')
       .select('id')
       .eq('source_email_id', message.id)
       .single()
 
-    if (existing) return
+    if (existing) return { saved: false, archived: false }
 
     // Nettoie les champs pour éviter l'injection de prompt
     const safeFrom = message.from.replace(/[<>]/g, '').slice(0, 100)
@@ -133,32 +173,54 @@ Contenu : ${safeBody}`
       analysis = JSON.parse(raw) as EmailAnalysis
     } catch {
       this.logger.warn(`Impossible d'analyser l'email "${message.subject}"`)
-      return
+      return { saved: false, archived: false }
     }
+
+    let saved = false
 
     if (!analysis.important || analysis.type === 'ignore') {
       this.logger.debug(`Email ignoré : "${message.subject}"`)
-      return
-    }
-
-    const { error } = await this.supabase.db
-      .from('email_tasks')
-      .insert({
-        member_id: memberId,
-        family_id: familyId,
-        type: analysis.type,
-        title: analysis.title,
-        content: analysis.content,
-        source_email_id: message.id,
-        source_subject: message.subject,
-        source_from: message.from,
-        done: false,
-      })
-
-    if (error) {
-      this.logger.error(`Erreur sauvegarde email_task: ${error.message}`)
     } else {
-      this.logger.log(`${analysis.type === 'task' ? 'Tâche' : 'Note'} créée : "${analysis.title}"`)
+      const { error } = await this.supabase.db
+        .from('email_tasks')
+        .insert({
+          member_id: memberId,
+          family_id: familyId,
+          type: analysis.type,
+          title: analysis.title,
+          content: analysis.content,
+          source_email_id: message.id,
+          source_subject: message.subject,
+          source_from: message.from,
+          done: false,
+        })
+
+      if (error) {
+        this.logger.error(`Erreur sauvegarde email_task: ${error.message}`)
+      } else {
+        this.logger.log(`${analysis.type === 'task' ? 'Tâche' : 'Note'} créée : "${analysis.title}"`)
+        saved = true
+      }
     }
+
+    let archived = false
+
+    if (archive) {
+      if (analysis.type === 'ignore') {
+        // Pub/spam : archivé sans créer de dossier
+        await this.gmail.moveToLabel(accessToken, message.id, null)
+        archived = true
+      } else {
+        const folderName = analysis.folder?.trim() || 'Divers'
+        const labelId = await this.gmail.getOrCreateLabel(accessToken, folderName, labelCache)
+        if (labelId) {
+          await this.gmail.moveToLabel(accessToken, message.id, labelId)
+          this.logger.debug(`Email déplacé dans "${folderName}" : "${message.subject}"`)
+          archived = true
+        }
+      }
+    }
+
+    return { saved, archived }
   }
 }
